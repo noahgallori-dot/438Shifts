@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>438 Shifts • Store #438 Associate Coverage</title>
+  <meta name="description"
+    content="Fast, clean shift swap and coverage board for Store #438 coworkers. View month/week schedules, drop shifts, and trade with associates.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <!-- Supabase JS SDK (Cross-Device Cloud Sync) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <!-- Brand (Hold for 3s to trigger Manager / Admin login) -->
+      <div class="brand-group" id="btn-brand-home" title="Tap for Home • Hold 3s for Manager Login">
+        <div class="brand-icon" id="brand-icon">
+          <span class="icon-palm" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
+              <path d="M16.5 33C16.5 25 18 19 20.5 14.5" stroke="#FCD34D" stroke-width="3.2" stroke-linecap="round" />
+              <path d="M20.5 14.5C15 11.5 8.5 13 5 17.5C10 16.5 15.5 16.5 20.5 14.5Z" fill="#4ADE80" />
+              <path d="M20.5 14.5C14 8.5 14.5 3.5 19.5 2C18.5 6.5 19 10.5 20.5 14.5Z" fill="#22C55E" />
+              <path d="M20.5 14.5C24.5 8 30.5 7.5 34 11.5C29 11.5 24.5 12.5 20.5 14.5Z" fill="#4ADE80" />
+              <path d="M20.5 14.5C26.5 14 31.5 17.5 32.5 22.5C28.5 19.5 24.5 16.5 20.5 14.5Z" fill="#16A34A" />
+              <path d="M20.5 14.5C13.5 16 9.5 20.5 9.5 25C13 21 16.5 17.5 20.5 14.5Z" fill="#16A34A" />
+            </svg>
+          </span>
+          <span class="icon-badge">438</span>
+          <div class="hold-progress-ring" id="hold-progress-ring"></div>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title-wrap">
+            <h1 class="brand-title">438 <span>SHIFTS</span></h1>
+            <span id="header-admin-badge" class="admin-status-badge" style="display: none;"
+              title="Manager Mode Active (Tap to logout)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#F59E0B" stroke="#B45309" stroke-width="1.8">
+                <polygon points="2 19 22 19 20 7 15 12 12 4 9 12 4 7 2 19"></polygon>
+              </svg>
+              <span>Admin</span>
+            </span>
+          </div>
+          <p class="brand-subtitle">Associate Dashboard</p>
+        </div>
+      </div>
+
+      <!-- Header Actions: Post Shift & Profile -->
+      <div class="header-actions">
+        <button id="btn-open-post-shift" class="btn-primary-action">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Post Shift</span>
+        </button>
+
+        <button id="btn-user-profile-header" class="user-chip-btn" aria-label="Associate Profile">
+          <div id="header-avatar" class="user-avatar-small">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2.2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+          <div class="user-info-text">
+            <span id="header-user-name" class="header-name">Set Profile</span>
+            <span id="header-user-level" class="header-level-badge">Required</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Missing Profile Reminder Alert -->
+  <div id="profile-warning-banner" class="profile-warning-banner" style="display: none;">
+    <div class="banner-content">
+      <span class="banner-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#FEF3C7" stroke="#D97706" stroke-width="2.2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </span>
+      <span class="banner-text"><strong>Setup Required:</strong> You must set your <strong>Name, Phone & Level (with
+          verified email)</strong> before adding shifts.</span>
+      <button id="btn-banner-setup" class="banner-btn">Complete Profile</button>
+    </div>
+  </div>
+
+  <!-- Reorganized Unified Control Bar -->
+  <section class="controls-bar">
+    <div class="controls-container">
+
+      <!-- Date Navigation Row -->
+      <div class="date-navigation-row">
+        <div class="date-stepper">
+          <button id="btn-nav-prev" class="nav-arrow-btn" aria-label="Previous Period">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <button id="btn-nav-today" class="nav-today-btn">Today</button>
+          <button id="btn-nav-next" class="nav-arrow-btn" aria-label="Next Period">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+        <h2 id="current-period-title" class="current-period-label">November 2026</h2>
+      </div>
+
+      <!-- Streamlined Controls Row: Views, My Shifts & Level Dropdown -->
+      <div class="filter-bar-row">
+        <div class="view-and-filter-left">
+          <!-- View Switcher (Month / Week) with animated sliding pill -->
+          <div class="view-switcher" data-active-view="month" role="tablist" aria-label="Schedule Views">
+            <div class="view-pill-glider" aria-hidden="true"></div>
+            <button id="btn-view-month" class="view-btn active" role="tab" aria-selected="true" data-view="month">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <rect x="3" y="4" width="18" height="18" rx="3"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <span>Month</span>
+            </button>
+            <button id="btn-view-week" class="view-btn" role="tab" aria-selected="false" data-view="week">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                <line x1="9" y1="4" x2="9" y2="20"></line>
+                <line x1="15" y1="4" x2="15" y2="20"></line>
+              </svg>
+              <span>Week</span>
+            </button>
+          </div>
+
+          <!-- Compact My Shifts Quick Filter -->
+          <button id="btn-toggle-my-shifts" class="filter-pill-toggle" title="Filter to only your shifts or all shifts">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span class="pill-text">My Shifts</span>
+          </button>
+        </div>
+
+        <!-- Compact Level Dropdown Filter -->
+        <div class="level-dropdown-wrapper">
+          <button type="button" id="btn-level-dropdown" class="level-dropdown-btn" aria-haspopup="true"
+            aria-expanded="false" title="Filter shifts by associate level">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span id="level-dropdown-label">Levels: All (1–6)</span>
+            <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          <div id="level-dropdown-menu" class="level-dropdown-menu" style="display: none;">
+            <div class="level-dropdown-menu-header">
+              <span class="dropdown-header-title">Associate Levels</span>
+              <div class="level-dropdown-header-actions">
+                <button type="button" id="btn-select-all-levels" class="btn-dropdown-link">All</button>
+                <span class="dropdown-action-sep">•</span>
+                <button type="button" id="btn-clear-all-levels" class="btn-dropdown-link">Clear</button>
+              </div>
+            </div>
+            <div class="level-dropdown-options">
+              <label class="level-dropdown-item">
+                <input type="checkbox" class="level-checkbox" value="1" checked>
+                <span class="check-box-indicator">✓</span>
+                <span class="level-badge l1">L1</span>
+                <span class="level-dropdown-item-title">Level 1</span>
+              </label>
+              <label class="level-dropdown-item">
+                <input type="checkbox" class="level-checkbox" value="2" checked>
+                <span class="check-box-indicator">✓</span>
+                <span class="level-badge l2">L2</span>
+                <span class="level-dropdown-item-title">Level 2</span>
+              </label>
+              <label class="level-dropdown-item">
+                <input type="checkbox" class="level-checkbox" value="3" checked>
+                <span class="check-box-indicator">✓</span>
+                <span class="level-badge l3">L3</span>
+                <span class="level-dropdown-item-title">Level 3</span>
+              </label>
+              <label class="level-dropdown-item">
+                <input type="checkbox" class="level-checkbox" value="4" checked>
+                <span class="check-box-indicator">✓</span>
+                <span class="level-badge l4">L4</span>
+                <span class="level-dropdown-item-title">Level 4</span>
+              </label>
+              <label class="level-dropdown-item">
+                <input type="checkbox" class="level-checkbox" value="5" checked>
+                <span class="check-box-indicator">✓</span>
+                <span class="level-badge l5">L5</span>
+                <span class="level-dropdown-item-title">Level 5</span>
+              </label>
+              <label class="level-dropdown-item">
+                <input type="checkbox" class="level-checkbox" value="6" checked>
+                <span class="check-box-indicator">✓</span>
+                <span class="level-badge l6">L6</span>
+                <span class="level-dropdown-item-title">Level 6</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Main View Container -->
+  <main class="main-content">
+    <div class="content-container">
+
+      <!-- Calendar (Month) View -->
+      <div id="calendar-view" class="view-container active">
+        <div class="calendar-wrapper">
+          <div class="calendar-weekdays-grid">
+            <div class="weekday-col">SUN</div>
+            <div class="weekday-col">MON</div>
+            <div class="weekday-col">TUE</div>
+            <div class="weekday-col">WED</div>
+            <div class="weekday-col">THU</div>
+            <div class="weekday-col">FRI</div>
+            <div class="weekday-col">SAT</div>
+          </div>
+          <div id="calendar-days-grid" class="calendar-days-grid">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Selected Day Shifts Drawer -->
+        <div id="selected-day-panel" class="selected-day-panel">
+          <div class="day-panel-header">
+            <div>
+              <span id="selected-day-badge" class="day-panel-badge">Selected Date</span>
+              <h3 id="selected-day-title" class="day-panel-title">Shifts for Date</h3>
+            </div>
+            <button id="btn-add-shift-for-day" class="btn-secondary-action">
+              <span>+ Post Shift For This Day</span>
+            </button>
+          </div>
+          <div id="selected-day-shifts-list" class="selected-day-shifts-list">
+            <!-- Day shift cards -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Weekly Schedule View -->
+      <div id="week-view" class="view-container">
+        <div class="week-schedule-wrapper">
+          <div id="week-columns-grid" class="week-columns-grid">
+            <!-- Rendered 7 day columns by JS -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Mobile Bottom Navigation Bar (Animated Month/Week Pill + Post Shift CTA) -->
+  <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+    <div class="mobile-view-pill-switcher" id="mobile-view-switcher" data-active-view="month" role="tablist"
+      aria-label="Schedule View Switcher">
+      <div class="mobile-pill-glider" aria-hidden="true"></div>
+      <button type="button" class="mobile-pill-tab active" data-tab="month" id="bottom-nav-month" role="tab"
+        aria-selected="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+          <rect x="3" y="4" width="18" height="18" rx="3"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span>Month</span>
+      </button>
+      <button type="button" class="mobile-pill-tab" data-tab="week" id="bottom-nav-week" role="tab"
+        aria-selected="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <line x1="9" y1="4" x2="9" y2="20"></line>
+          <line x1="15" y1="4" x2="15" y2="20"></line>
+        </svg>
+        <span>Week</span>
+      </button>
+    </div>
+
+    <button type="button" class="nav-item-add" id="bottom-nav-post-shift">
+      <div class="nav-add-pill">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Post Shift</span>
+      </div>
+    </button>
+  </nav>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- 1. Shift Details Modal -->
+  <div id="modal-shift-details" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card modal-shift-details-card">
+      <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+
+      <div class="shift-detail-header">
+        <div class="associate-card-main">
+          <div id="detail-associate-avatar" class="associate-avatar-lg">👨‍🍳</div>
+          <div class="associate-info">
+            <h3 id="detail-associate-name" class="detail-name">Marcus Vance</h3>
+            <div id="detail-associate-level-badge" class="level-tag-badge">
+              <span id="detail-level-pill" class="level-num">Level 5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="shift-timing-banner">
+        <div class="time-block">
+          <span class="time-sub">DATE</span>
+          <span id="detail-shift-date" class="time-main">Saturday, Nov 1, 2026</span>
+        </div>
+        <div class="time-block highlight">
+          <span class="time-sub">SHIFT TIME</span>
+          <span id="detail-shift-hours" class="time-main">4:00 PM – 10:30 PM</span>
+          <span id="detail-shift-duration" class="duration-chip">6.5 hrs</span>
+        </div>
+      </div>
+
+      <div class="shift-details-body">
+        <div class="info-row" id="detail-notes-container">
+          <div class="info-label">Coworker Note</div>
+          <div id="detail-shift-notes" class="info-value notes-quote">"Need someone to cover my closing board shift!
+            Have an exam."</div>
+        </div>
+
+        <div class="info-row">
+          <div class="info-label">Phone & Contact</div>
+          <div class="phone-action-box">
+            <div id="detail-associate-phone" class="phone-number-display">(949) 555-0142</div>
+            <button id="btn-copy-phone" class="btn-pill-small" title="Copy Phone Number">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+                style="vertical-align:-2px;margin-right:3px;">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>Copy
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Direct Contact (Call & Text) and Action -->
+      <div class="shift-detail-actions">
+        <a id="btn-direct-call" href="tel:" class="btn-action-contact btn-call">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path
+              d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
+            </path>
+          </svg>
+          <span>Call Coworker</span>
+        </a>
+        <a id="btn-direct-sms" href="sms:" class="btn-action-contact btn-sms">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Text (SMS)</span>
+        </a>
+        <!-- Action ONLY for Shift Poster: "Cover Shift" takes it down forever -->
+        <button id="btn-shift-covered" class="btn-action-covered" style="display: none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Cover Shift (Take Down Forever)</span>
+        </button>
+      </div>
+
+      <!-- Manager Takedown Action -->
+      <div id="owner-actions-row" class="owner-actions-row" style="display: none;">
+        <button id="btn-delete-shift" class="btn-manager-delete-shift">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          <span>Delete Shift Post</span>
+          <span id="admin-takedown-badge" class="admin-chip-mini">Manager</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Post Shift Modal -->
+  <div id="modal-post-shift" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+      <div class="modal-header">
+        <div class="modal-badge-tag">STORE #438</div>
+        <h2 class="modal-title">Post a Shift to Cover or Trade</h2>
+        <p class="modal-sub">Drop your shift so your coworkers can see it and text/call you.</p>
+      </div>
+
+      <form id="form-post-shift" class="modal-form">
+        <div class="form-group">
+          <label for="post-date">Shift Date *</label>
+          <input type="date" id="post-date" required>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="post-start-time">Start Time *</label>
+            <input type="time" id="post-start-time" value="16:00" required>
+          </div>
+          <div class="form-group">
+            <label for="post-end-time">End Time *</label>
+            <input type="time" id="post-end-time" value="22:30" required>
+          </div>
+        </div>
+
+        <div class="duration-helper-bar">
+          <span>Shift Length:</span>
+          <strong id="post-calc-duration">6.5 hours</strong>
+        </div>
+
+        <div class="form-group">
+          <label for="post-notes">Notes for Coworkers (Optional)</label>
+          <textarea id="post-notes" rows="2"
+            placeholder="e.g. Willing to trade for Sunday or someone please take it!"></textarea>
+        </div>
+
+        <button type="submit" class="btn-submit-primary">
+          <span>Post Shift to Board</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Profile Setup & Edit Modal with EmailJS Verification -->
+  <div id="modal-profile" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+      <button id="btn-close-profile-modal" class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+      <div class="modal-header">
+        <div id="profile-modal-badge" class="modal-badge-tag">ASSOCIATE DETAILS</div>
+        <h2 id="profile-modal-title" class="modal-title">Your Crew Profile</h2>
+        <p class="modal-sub">Confirm your identity with email verification so no funny business goes down.</p>
+      </div>
+
+      <form id="form-profile" class="modal-form">
+        <!-- Avatar Selector -->
+        <div class="avatar-select-section">
+          <label class="section-label">Choose Avatar or Upload Photo</label>
+          <div class="avatar-current-preview">
+            <div id="profile-preview-avatar" class="avatar-circle-lg">👨‍🍳</div>
+            <div class="avatar-upload-action">
+              <label for="profile-avatar-upload" class="upload-btn-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+                  style="vertical-align:-2px;margin-right:4px;">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>Upload Photo
+              </label>
+              <input type="file" id="profile-avatar-upload" accept="image/*" style="display: none;">
+              <span class="upload-hint">or tap a crew icon:</span>
+            </div>
+          </div>
+          <div id="avatar-presets-grid" class="avatar-presets-grid">
+            <!-- Preset avatars -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="profile-name">Full Name *</label>
+          <input type="text" id="profile-name" placeholder="e.g. Jordan Taylor" required autocomplete="name">
+        </div>
+
+        <!-- Email & Verification (EmailJS) -->
+        <div class="form-group">
+          <label for="profile-email">Email Address (For Verification) *</label>
+          <div class="email-input-wrap">
+            <input type="email" id="profile-email" placeholder="e.g. coworker@gmail.com" required autocomplete="email">
+            <button type="button" id="btn-send-code" class="btn-send-code">
+              <span>Send 6-Digit Code</span>
+            </button>
+          </div>
+          <div id="email-verified-chip" class="email-verified-chip" style="display: none;">
+            ✅ Email Confirmed & Verified
+          </div>
+        </div>
+
+        <!-- Clear Email Error & Instant Bypass Assistant -->
+        <div id="email-error-alert" class="email-error-alert" style="display: none;">
+          <div class="alert-header">
+            <span class="err-icon">⚠️</span>
+            <span id="email-error-message">Service ID not found in EmailJS.</span>
+          </div>
+          <div class="alert-desc">
+            If your EmailJS service is pending, use the generated test code below to verify immediately:
+          </div>
+          <button type="button" id="btn-quick-fill-code" class="btn-quick-code">
+            ⚡ Auto-Fill Code (<span id="quick-code-display">123456</span>)
+          </button>
+        </div>
+
+        <!-- 6-digit Code Entry (Shown after sending code) -->
+        <div id="verification-code-group" class="verification-code-group" style="display: none;">
+          <div class="verify-code-box">
+            <div class="verify-header">
+              <span>Enter 6-Digit Code sent to your email:</span>
+              <button type="button" id="btn-resend-code" class="btn-mini-text">Resend</button>
+            </div>
+            <div class="code-action-row">
+              <input type="text" id="profile-code-input" class="code-input" maxlength="6" placeholder="123456"
+                inputmode="numeric">
+              <button type="button" id="btn-verify-code" class="btn-verify-submit">
+                <span>Confirm Code</span>
+              </button>
+            </div>
+            <span class="code-help-text">Check your inbox or spam folder for the verification code.</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="profile-phone">Phone Number (Required for text/call) *</label>
+          <input type="tel" id="profile-phone" placeholder="e.g. (949) 555-0199" required autocomplete="tel">
+        </div>
+
+        <div class="form-group">
+          <label for="profile-level">Your In-N-Out Associate Level (1–6) *</label>
+          <select id="profile-level" required>
+            <option value="1">Level 1</option>
+            <option value="2">Level 2</option>
+            <option value="3">Level 3</option>
+            <option value="4">Level 4</option>
+            <option value="5">Level 5</option>
+            <option value="6">Level 6</option>
+          </select>
+        </div>
+
+        <button type="submit" id="btn-save-profile" class="btn-submit-primary">
+          <span>Save Profile</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3b. Interactive Photo Cropper Modal -->
+  <div id="modal-crop-photo" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card modal-cropper-card">
+      <button class="modal-close-btn" id="btn-cancel-crop-x" aria-label="Cancel cropping">✕</button>
+      <div class="modal-header">
+        <div class="modal-badge-tag">PHOTO ADJUST</div>
+        <h2 class="modal-title">Crop Profile Photo</h2>
+        <p class="modal-sub">Drag to reposition, use slider to zoom, then crop your photo.</p>
+      </div>
+
+      <div class="cropper-content">
+        <div class="cropper-canvas-wrapper" id="cropper-container">
+          <canvas id="cropper-canvas" width="300" height="300"></canvas>
+          <div class="cropper-guide-ring"></div>
+        </div>
+
+        <div class="cropper-controls-row">
+          <div class="cropper-slider-group">
+            <span class="cropper-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <line x1="8" y1="11" x2="14" y2="11"></line>
+              </svg>
+            </span>
+            <input type="range" id="cropper-zoom-range" min="1" max="3" step="0.05" value="1" title="Zoom">
+            <span class="cropper-icon" aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <line x1="11" y1="8" x2="11" y2="14"></line>
+                <line x1="8" y1="11" x2="14" y2="11"></line>
+              </svg>
+            </span>
+          </div>
+          <button type="button" id="btn-cropper-rotate" class="btn-cropper-action" title="Rotate 90 degrees">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+              style="vertical-align:-2px;margin-right:3px;">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>Rotate
+          </button>
+        </div>
+
+        <div class="cropper-modal-actions">
+          <button type="button" id="btn-cropper-cancel" class="btn-cropper-secondary">Cancel</button>
+          <button type="button" id="btn-cropper-apply" class="btn-cropper-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Crop & Use Photo</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Manager / Admin Unlock Modal (Triggered by holding logo for 3s) -->
+  <div id="modal-admin-login" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card modal-admin-card">
+      <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+      <div class="modal-header">
+        <div class="modal-badge-tag">ADMIN ACCESS</div>
+        <h2 class="modal-title">Administrator Unlock</h2>
+        <p class="modal-sub">Enter the password to manage or remove any shift posting on the board.</p>
+      </div>
+
+      <form id="form-admin-login" class="modal-form">
+        <div class="form-group">
+          <label for="admin-password">Manager Password</label>
+          <input type="password" id="admin-password" placeholder="Enter password" autocomplete="current-password"
+            required>
+        </div>
+        <button type="submit" class="btn-submit-primary">
+          <span>Unlock Manager Access</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Store Manager Hub & Google Sheet Roster Modal -->
+  <div id="modal-manager-hub" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card modal-sheet-card">
+      <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+
+      <!-- Sheet Hub Top Bar -->
+      <div class="sheet-modal-header">
+        <div class="sheet-brand-row">
+          <div class="sheet-logo-badge">
+            <span class="sheet-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="3" y1="15" x2="21" y2="15"></line>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+            </span>
+            <div>
+              <h2 class="sheet-title">Store #438 Associate Directory & Device Log</h2>
+              <p class="sheet-sub">Google Sheet View • Real-time Crew Registrations, Verified Emails & Device
+                Fingerprints</p>
+            </div>
+          </div>
+          <div class="sheet-header-actions">
+            <button id="btn-copy-sheet" class="btn-sheet-toolbar"
+              title="Copy tab-separated table to clipboard (Paste directly into Google Sheets)">
+              Copy for Google Sheets
+            </button>
+            <button id="btn-download-csv" class="btn-sheet-toolbar primary" title="Download CSV spreadsheet">
+              Export to CSV
+            </button>
+            <button id="btn-manager-logout" class="btn-sheet-toolbar danger" title="Log out of Store Manager Mode">
+              Log Out
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Stats Cards -->
+        <div class="sheet-stats-bar">
+          <div class="stat-box">
+            <span class="stat-label">TOTAL ASSOCIATES</span>
+            <strong id="stat-total-crew" class="stat-val">7</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">VERIFIED EMAILS</span>
+            <strong id="stat-verified-count" class="stat-val">7</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">MOBILE ACCESS</span>
+            <strong id="stat-mobile-pct" class="stat-val">71%</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">ACTIVE SHIFTS</span>
+            <strong id="stat-active-shifts" class="stat-val">7</strong>
+          </div>
+        </div>
+
+        <!-- Sheet Search & Tools -->
+        <div class="sheet-controls-bar">
+          <div class="sheet-search-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="sheet-search-input"
+              placeholder="Filter by associate name, email, phone, level or device...">
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button id="btn-copy-supabase-sql" class="btn-sheet-toolbar"
+              title="Copy SQL script to create tables in Supabase SQL Editor">
+              Copy Supabase SQL
+            </button>
+            <button id="btn-toggle-email-config" class="btn-sheet-toolbar">
+              EmailJS Settings
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible EmailJS Configuration Panel for Store Manager -->
+        <div id="emailjs-config-panel" class="emailjs-config-panel" style="display: none;">
+          <div class="config-panel-header">
+            <h4>⚙️ EmailJS Configuration (Store Manager Settings)</h4>
+            <span class="config-help">Update your EmailJS credentials anytime without touching code</span>
+          </div>
+          <div class="config-grid">
+            <div class="config-field">
+              <label>Service ID:</label>
+              <input type="text" id="config-service-id" value="vkb9abj*zwq@MBD0vbe">
+            </div>
+            <div class="config-field">
+              <label>Template ID:</label>
+              <input type="text" id="config-template-id" value="template_7775lqt">
+            </div>
+            <div class="config-field">
+              <label>Public Key:</label>
+              <input type="text" id="config-public-key" value="LyzjvTE6-eDxTMS7e">
+            </div>
+          </div>
+          <div class="config-footer">
+            <span class="config-note">Tip: Check <a href="https://dashboard.emailjs.com/admin" target="_blank"
+                rel="noopener">dashboard.emailjs.com/admin</a> to verify your active Service ID.</span>
+            <button type="button" id="btn-save-email-config" class="btn-sheet-toolbar primary">Save Settings</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Google Sheet Table Wrapper -->
+      <div class="google-sheet-table-wrapper">
+        <table class="google-sheet-table" id="manager-roster-table">
+          <thead>
+            <tr>
+              <th class="col-num">#</th>
+              <th>Associate Name</th>
+              <th>Level</th>
+              <th>Email Address</th>
+              <th>Phone Number</th>
+              <th>Joined Date & Time</th>
+              <th>Device & Platform</th>
+              <th>Screen Size</th>
+              <th>Type</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="manager-roster-tbody">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sheet-modal-footer">
+        <span class="sheet-footer-info">Showing all registered Store #438 associates • Device logs captured during
+          profile confirmation</span>
+        <button class="btn-sheet-toolbar" data-close-modal>Close Roster</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Confetti Canvas -->
+  <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

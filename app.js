@@ -158,7 +158,30 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   async function upsertEmailJSConfigToSupabase(cfg) {
-    const dbRow = {
+    const shiftConfigRow = {
+      id: SUPABASE_EMAILJS_CONFIG_ID,
+      date: "1970-01-01",
+      start_time: "00:00",
+      end_time: "00:00",
+      notes: JSON.stringify({
+        isSystemConfig: true,
+        serviceId: cfg.serviceId,
+        templateId: cfg.templateId,
+        publicKey: cfg.publicKey,
+        updatedAt: new Date().toISOString()
+      }),
+      status: "config",
+      author_id: SUPABASE_EMAILJS_CONFIG_ID,
+      author_name: cfg.serviceId || "",
+      author_email: cfg.templateId || "",
+      author_phone: cfg.publicKey || "",
+      author_level: 1,
+      author_avatar: "👨‍🍳",
+      author_avatar_bg: "#FFF8E6",
+      created_at: new Date().toISOString()
+    };
+
+    const assocConfigRow = {
       id: SUPABASE_EMAILJS_CONFIG_ID,
       name: "Store 438 EmailJS Config",
       email: cfg.serviceId || "",
@@ -176,17 +199,27 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         updatedAt: new Date().toISOString()
       }
     };
+
+    let ok = false;
     try {
-      const res = await fetch(`${SUPABASE_REST_URL}/associates?on_conflict=id`, {
+      const resShift = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
         method: "POST",
         headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
-        body: JSON.stringify(dbRow)
+        body: JSON.stringify(shiftConfigRow)
       });
-      return res.ok;
-    } catch (e) {
-      console.warn("Supabase EmailJS config upsert error:", e);
-      return false;
-    }
+      if (resShift.ok) ok = true;
+    } catch (e) {}
+
+    try {
+      const resAssoc = await fetch(`${SUPABASE_REST_URL}/associates?on_conflict=id`, {
+        method: "POST",
+        headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify(assocConfigRow)
+      });
+      if (resAssoc.ok) ok = true;
+    } catch (e) {}
+
+    return ok;
   }
 
   function saveEmailJSConfig(cfg) {
@@ -635,17 +668,49 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         const rows = await shiftsRes.json();
         const deletedSet = getDeletedShiftIds();
 
-        if (Array.isArray(rows) && rows.length > 0) {
-          const cloudShifts = rows
-            .map(mapDbRowToShift)
-            .filter(s => s && s.status !== "claimed" && !deletedSet.has(s.id));
-          state.shifts = cloudShifts;
-          saveShiftsLocalOnly(state.shifts);
-        } else if (Array.isArray(rows) && rows.length === 0 && state.shifts.length > 0) {
-          // Seed initial local shifts to Supabase if table is empty and not all deleted
-          for (const s of state.shifts) {
-            if (!deletedSet.has(s.id)) {
-              upsertShiftToSupabase(s);
+        if (Array.isArray(rows)) {
+          // Check if EmailJS config row is stored in shifts table
+          const shiftCfgRow = rows.find(
+            r => r && (r.id === SUPABASE_EMAILJS_CONFIG_ID || r.status === "config")
+          );
+          if (shiftCfgRow) {
+            let parsedNotes = {};
+            try {
+              if (shiftCfgRow.notes && shiftCfgRow.notes.startsWith("{")) {
+                parsedNotes = JSON.parse(shiftCfgRow.notes);
+              }
+            } catch (e) {}
+            const cloudCfg = {
+              serviceId: parsedNotes.serviceId || shiftCfgRow.author_name || DEFAULT_EMAILJS.serviceId,
+              templateId: parsedNotes.templateId || shiftCfgRow.author_email || DEFAULT_EMAILJS.templateId,
+              publicKey: parsedNotes.publicKey || shiftCfgRow.author_phone || DEFAULT_EMAILJS.publicKey
+            };
+            saveEmailJSConfigLocalOnly(cloudCfg);
+          } else {
+            const localRaw = localStorage.getItem(STORAGE_KEY_EMAILJS);
+            if (localRaw) {
+              try {
+                upsertEmailJSConfigToSupabase(JSON.parse(localRaw));
+              } catch (e) {}
+            }
+          }
+
+          const realShiftRows = rows.filter(
+            r => r && r.id !== SUPABASE_EMAILJS_CONFIG_ID && r.status !== "config"
+          );
+
+          if (realShiftRows.length > 0) {
+            const cloudShifts = realShiftRows
+              .map(mapDbRowToShift)
+              .filter(s => s && s.status !== "claimed" && !deletedSet.has(s.id));
+            state.shifts = cloudShifts;
+            saveShiftsLocalOnly(state.shifts);
+          } else if (realShiftRows.length === 0 && state.shifts.length > 0) {
+            // Seed initial local shifts to Supabase if table is empty and not all deleted
+            for (const s of state.shifts) {
+              if (!deletedSet.has(s.id)) {
+                upsertShiftToSupabase(s);
+              }
             }
           }
         }

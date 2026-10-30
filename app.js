@@ -123,8 +123,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   const STORAGE_KEY_ADMIN = "crew_is_admin_438";
   const STORAGE_KEY_ROSTER = "crew_associates_roster_438";
   const STORAGE_KEY_EMAILJS = "crew_emailjs_config_438";
+  const SUPABASE_EMAILJS_CONFIG_ID = "__store_438_emailjs_config__";
 
-  // EmailJS Defaults (Configurable by Store Manager)
+  // EmailJS Defaults (Configurable by Store Manager & Synced via Supabase)
   const DEFAULT_EMAILJS = {
     serviceId: "service_z9v1wnm",
     templateId: "template_7775lqt",
@@ -134,15 +135,63 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   function getEmailJSConfig() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_EMAILJS);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.serviceId && parsed.templateId && parsed.publicKey) {
+          return parsed;
+        }
+      }
     } catch (e) {}
     return DEFAULT_EMAILJS;
   }
 
-  function saveEmailJSConfig(cfg) {
+  function saveEmailJSConfigLocalOnly(cfg) {
     try {
       localStorage.setItem(STORAGE_KEY_EMAILJS, JSON.stringify(cfg));
     } catch (e) {}
+    const inputCfgService = document.getElementById("config-service-id");
+    const inputCfgTemplate = document.getElementById("config-template-id");
+    const inputCfgKey = document.getElementById("config-public-key");
+    if (inputCfgService && document.activeElement !== inputCfgService) inputCfgService.value = cfg.serviceId;
+    if (inputCfgTemplate && document.activeElement !== inputCfgTemplate) inputCfgTemplate.value = cfg.templateId;
+    if (inputCfgKey && document.activeElement !== inputCfgKey) inputCfgKey.value = cfg.publicKey;
+  }
+
+  async function upsertEmailJSConfigToSupabase(cfg) {
+    const dbRow = {
+      id: SUPABASE_EMAILJS_CONFIG_ID,
+      name: "Store 438 EmailJS Config",
+      email: cfg.serviceId || "",
+      phone: cfg.templateId || "",
+      level: 1,
+      avatar: cfg.publicKey || "",
+      avatar_bg: "#FFF8E6",
+      email_verified: true,
+      joined_at: new Date().toISOString(),
+      device: {
+        isSystemConfig: true,
+        serviceId: cfg.serviceId,
+        templateId: cfg.templateId,
+        publicKey: cfg.publicKey,
+        updatedAt: new Date().toISOString()
+      }
+    };
+    try {
+      const res = await fetch(`${SUPABASE_REST_URL}/associates?on_conflict=id`, {
+        method: "POST",
+        headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify(dbRow)
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn("Supabase EmailJS config upsert error:", e);
+      return false;
+    }
+  }
+
+  function saveEmailJSConfig(cfg) {
+    saveEmailJSConfigLocalOnly(cfg);
+    upsertEmailJSConfigToSupabase(cfg);
   }
 
   // Track permanently deleted / covered shift IDs locally so seed data never resurrects them
@@ -384,6 +433,19 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     return (phone || "").replace(/[^0-9+]/g, "");
   }
 
+  // Live Phone Number Formatter: formats digits as (XXX) XXX-XXXX while typing
+  function formatPhoneNumberLive(val) {
+    let digits = String(val || "").replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("1")) {
+      digits = digits.slice(1);
+    }
+    digits = digits.slice(0, 10);
+    if (digits.length === 0) return "";
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  }
+
   // Check if current signed-in user is the person who posted the shift (works across devices!)
   function isShiftOwner(shift) {
     if (!shift || !state.userProfile) return false;
@@ -589,7 +651,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         }
       }
 
-      // 2. Fetch Associates Roster from Supabase
+      // 2. Fetch Associates Roster & Shared EmailJS Settings from Supabase
       const assocRes = await fetch(`${SUPABASE_REST_URL}/associates?select=*&order=joined_at.desc`, {
         method: "GET",
         headers: getSupabaseHeaders()
@@ -598,35 +660,62 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (assocRes.ok) {
         state.supabaseConnected = true;
         const rows = await assocRes.json();
-        if (Array.isArray(rows) && rows.length > 0) {
-          const cloudAssociates = rows.map(mapDbRowToAssociate).filter(Boolean);
-          state.associates = cloudAssociates;
-          saveAssociatesLocalOnly(state.associates);
-
-          // If current device user matches a cloud profile by email, keep profile synced across devices
-          if (state.userProfile && state.userProfile.email) {
-            const match = cloudAssociates.find(
-              a => a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase()
-            );
-            if (match) {
-              state.userProfile = {
-                ...state.userProfile,
-                id: match.id,
-                name: match.name || state.userProfile.name,
-                phone: match.phone || state.userProfile.phone,
-                level: match.level || state.userProfile.level,
-                avatar: match.avatar || state.userProfile.avatar,
-                avatarBg: match.avatarBg || state.userProfile.avatarBg
-              };
+        if (Array.isArray(rows)) {
+          // Check for shared EmailJS config row stored in Supabase
+          const configRow = rows.find(
+            r => r && (r.id === SUPABASE_EMAILJS_CONFIG_ID || r.device?.isSystemConfig === true)
+          );
+          if (configRow) {
+            const cloudCfg = {
+              serviceId: configRow.device?.serviceId || configRow.email || DEFAULT_EMAILJS.serviceId,
+              templateId: configRow.device?.templateId || configRow.phone || DEFAULT_EMAILJS.templateId,
+              publicKey: configRow.device?.publicKey || configRow.avatar || DEFAULT_EMAILJS.publicKey
+            };
+            saveEmailJSConfigLocalOnly(cloudCfg);
+          } else {
+            // If local device has EmailJS config saved, push it to Supabase so other devices receive it
+            const localRaw = localStorage.getItem(STORAGE_KEY_EMAILJS);
+            if (localRaw) {
               try {
-                localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+                upsertEmailJSConfigToSupabase(JSON.parse(localRaw));
               } catch (e) {}
-              updateUserHeaderDisplay();
             }
           }
-        } else if (Array.isArray(rows) && rows.length === 0 && state.associates.length > 0) {
-          for (const a of state.associates) {
-            upsertAssociateToSupabase(a);
+
+          const personRows = rows.filter(
+            r => r && r.id !== SUPABASE_EMAILJS_CONFIG_ID && !r.device?.isSystemConfig
+          );
+
+          if (personRows.length > 0) {
+            const cloudAssociates = personRows.map(mapDbRowToAssociate).filter(Boolean);
+            state.associates = cloudAssociates;
+            saveAssociatesLocalOnly(state.associates);
+
+            // If current device user matches a cloud profile by email, keep profile synced across devices
+            if (state.userProfile && state.userProfile.email) {
+              const match = cloudAssociates.find(
+                a => a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase()
+              );
+              if (match) {
+                state.userProfile = {
+                  ...state.userProfile,
+                  id: match.id,
+                  name: match.name || state.userProfile.name,
+                  phone: match.phone || state.userProfile.phone,
+                  level: match.level || state.userProfile.level,
+                  avatar: match.avatar || state.userProfile.avatar,
+                  avatarBg: match.avatarBg || state.userProfile.avatarBg
+                };
+                try {
+                  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+                } catch (e) {}
+                updateUserHeaderDisplay();
+              }
+            }
+          } else if (personRows.length === 0 && state.associates.length > 0) {
+            for (const a of state.associates) {
+              upsertAssociateToSupabase(a);
+            }
           }
         }
       }
@@ -1493,8 +1582,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (state.userProfile) {
       if (nameInput) nameInput.value = state.userProfile.name || "";
       if (emailInput) emailInput.value = state.userProfile.email || "";
-      if (phoneInput) phoneInput.value = state.userProfile.phone || "";
-      if (levelSelect) levelSelect.value = state.userProfile.level || 4;
+      if (phoneInput) phoneInput.value = formatPhoneNumberLive(state.userProfile.phone || "");
+      if (levelSelect) levelSelect.value = state.userProfile.level || 1;
       updateProfileAvatarPreview(state.userProfile.avatar);
 
       if (state.userProfile.email) {
@@ -1512,7 +1601,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (nameInput) nameInput.value = "";
       if (emailInput) emailInput.value = "";
       if (phoneInput) phoneInput.value = "";
-      if (levelSelect) levelSelect.value = 4;
+      if (levelSelect) levelSelect.value = 1;
       state.isEmailVerified = false;
       state.verifiedEmail = "";
       if (verifiedChip) verifiedChip.style.display = "none";
@@ -1559,6 +1648,25 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   // EmailJS Code Dispatcher with Exact Error Reporting & Auto-Bypass
   // ==========================================================================
   async function sendEmailVerificationCode(email) {
+    // Ensure latest EmailJS settings are pulled from Supabase if another device updated them
+    try {
+      const cfgRes = await fetch(
+        `${SUPABASE_REST_URL}/associates?id=eq.${encodeURIComponent(SUPABASE_EMAILJS_CONFIG_ID)}&select=*`,
+        { method: "GET", headers: getSupabaseHeaders() }
+      );
+      if (cfgRes.ok) {
+        const rows = await cfgRes.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const r = rows[0];
+          saveEmailJSConfigLocalOnly({
+            serviceId: r.device?.serviceId || r.email || DEFAULT_EMAILJS.serviceId,
+            templateId: r.device?.templateId || r.phone || DEFAULT_EMAILJS.templateId,
+            publicKey: r.device?.publicKey || r.avatar || DEFAULT_EMAILJS.publicKey
+          });
+        }
+      }
+    } catch (e) {}
+
     const config = getEmailJSConfig();
     const code = String(Math.floor(100000 + Math.random() * 900000));
     state.pendingVerification = {
@@ -1798,11 +1906,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     state.userProfile = loadUserProfile();
     state.shifts = loadShifts();
     state.associates = loadAssociatesRoster();
-    // Manager mode always logs out on page reload
-    state.isAdmin = false;
+    // Persist Manager Mode across page reloads until manager explicitly logs out
     try {
-      localStorage.removeItem(STORAGE_KEY_ADMIN);
-    } catch (e) {}
+      state.isAdmin = localStorage.getItem(STORAGE_KEY_ADMIN) === "true";
+    } catch (e) {
+      state.isAdmin = false;
+    }
 
     if (state.userProfile) {
       syncUserProfileToRoster(state.userProfile);
@@ -1979,9 +2088,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
       if (val === "Richeson456") {
         state.isAdmin = true;
-        try { localStorage.removeItem(STORAGE_KEY_ADMIN); } catch (e) {}
+        try { localStorage.setItem(STORAGE_KEY_ADMIN, "true"); } catch (e) {}
         playSuccess();
-        showToast("👑 Store Manager Mode Activated! You can now delete any shift or tap the logo for Manager Hub.", "success");
+        showToast("Store Manager Mode Activated! You can now delete any shift or tap the logo for Manager Hub.", "success");
         updateAdminHeaderDisplay();
         closeModal(document.getElementById("modal-admin-login"));
         if (input) input.value = "";
@@ -2057,7 +2166,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       };
       saveEmailJSConfig(newCfg);
       playSuccess();
-      showToast("EmailJS settings updated!", "success");
+      showToast("EmailJS settings saved & synced to Supabase across all devices!", "success");
       if (emailConfigPanel) emailConfigPanel.style.display = "none";
     });
 
@@ -2431,13 +2540,23 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
     });
 
+    // Live phone number formatting as user types: (XXX) XXX-XXXX
+    const phoneInputEl = document.getElementById("profile-phone");
+    phoneInputEl?.addEventListener("input", (e) => {
+      const formatted = formatPhoneNumberLive(e.target.value);
+      if (e.target.value !== formatted) {
+        e.target.value = formatted;
+      }
+    });
+
     // 11. Profile Form Submit (Stores Device Info & Syncs to Supabase)
     document.getElementById("form-profile")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const name = document.getElementById("profile-name")?.value.trim();
       const email = document.getElementById("profile-email")?.value.trim();
-      const phone = document.getElementById("profile-phone")?.value.trim();
-      const level = parseInt(document.getElementById("profile-level")?.value, 10);
+      const rawPhone = document.getElementById("profile-phone")?.value.trim();
+      const phone = formatPhoneNumberLive(rawPhone) || rawPhone;
+      const level = parseInt(document.getElementById("profile-level")?.value, 10) || 1;
 
       if (!name || !phone || !email || !level) {
         showToast("All fields are required!", "error");

@@ -118,19 +118,37 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
   // Storage Keys
   const STORAGE_KEY_USER = "crew_user_profile_438";
-  const STORAGE_KEY_SHIFTS = "crew_shifts_data_438";
+  const STORAGE_KEY_SHIFTS_LEGACY = "crew_shifts_data_438";
+  const STORAGE_KEY_SHIFTS = "crew_shifts_cloud_v2_438";
   const STORAGE_KEY_DELETED_SHIFTS = "crew_deleted_shifts_438";
   const STORAGE_KEY_ADMIN = "crew_is_admin_438";
+  const STORAGE_KEY_ADMIN_HUB_OPEN = "crew_admin_hub_open_438";
   const STORAGE_KEY_ROSTER = "crew_associates_roster_438";
   const STORAGE_KEY_EMAILJS = "crew_emailjs_config_438";
   const SUPABASE_EMAILJS_CONFIG_ID = "__store_438_emailjs_config__";
 
-  // EmailJS Defaults (Configurable by Store Manager & Synced via Supabase)
+  // EmailJS Defaults (Configured with Store #438 keys & Synced via Supabase)
   const DEFAULT_EMAILJS = {
-    serviceId: "service_z9v1wnm",
-    templateId: "template_7775lqt",
-    publicKey: "LyzjvTE6-eDxTMS7e"
+    serviceId: "service_fc5qlhe",
+    templateId: "template_gd1prmq",
+    publicKey: "ZRmiY1jbzERyD6utf"
   };
+
+  const LEGACY_EMAILJS_VALUES = new Set([
+    "service_z9v1wnm",
+    "vkb9abj*zwq@MBD0vbe",
+    "template_7775lqt",
+    "LyzjvTE6-eDxTMS7e"
+  ]);
+
+  function normalizeEmailJSConfig(cfg) {
+    if (!cfg || typeof cfg !== "object") return { ...DEFAULT_EMAILJS };
+    return {
+      serviceId: (!cfg.serviceId || LEGACY_EMAILJS_VALUES.has(cfg.serviceId)) ? DEFAULT_EMAILJS.serviceId : cfg.serviceId,
+      templateId: (!cfg.templateId || LEGACY_EMAILJS_VALUES.has(cfg.templateId)) ? DEFAULT_EMAILJS.templateId : cfg.templateId,
+      publicKey: (!cfg.publicKey || LEGACY_EMAILJS_VALUES.has(cfg.publicKey)) ? DEFAULT_EMAILJS.publicKey : cfg.publicKey
+    };
+  }
 
   function getEmailJSConfig() {
     try {
@@ -138,26 +156,36 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && parsed.serviceId && parsed.templateId && parsed.publicKey) {
-          return parsed;
+          const normalized = normalizeEmailJSConfig(parsed);
+          if (
+            normalized.serviceId !== parsed.serviceId ||
+            normalized.templateId !== parsed.templateId ||
+            normalized.publicKey !== parsed.publicKey
+          ) {
+            localStorage.setItem(STORAGE_KEY_EMAILJS, JSON.stringify(normalized));
+          }
+          return normalized;
         }
       }
     } catch (e) {}
-    return DEFAULT_EMAILJS;
+    return { ...DEFAULT_EMAILJS };
   }
 
   function saveEmailJSConfigLocalOnly(cfg) {
+    const cleanCfg = normalizeEmailJSConfig(cfg);
     try {
-      localStorage.setItem(STORAGE_KEY_EMAILJS, JSON.stringify(cfg));
+      localStorage.setItem(STORAGE_KEY_EMAILJS, JSON.stringify(cleanCfg));
     } catch (e) {}
     const inputCfgService = document.getElementById("config-service-id");
     const inputCfgTemplate = document.getElementById("config-template-id");
     const inputCfgKey = document.getElementById("config-public-key");
-    if (inputCfgService && document.activeElement !== inputCfgService) inputCfgService.value = cfg.serviceId;
-    if (inputCfgTemplate && document.activeElement !== inputCfgTemplate) inputCfgTemplate.value = cfg.templateId;
-    if (inputCfgKey && document.activeElement !== inputCfgKey) inputCfgKey.value = cfg.publicKey;
+    if (inputCfgService && document.activeElement !== inputCfgService) inputCfgService.value = cleanCfg.serviceId;
+    if (inputCfgTemplate && document.activeElement !== inputCfgTemplate) inputCfgTemplate.value = cleanCfg.templateId;
+    if (inputCfgKey && document.activeElement !== inputCfgKey) inputCfgKey.value = cleanCfg.publicKey;
   }
 
   async function upsertEmailJSConfigToSupabase(cfg) {
+    const cleanCfg = normalizeEmailJSConfig(cfg);
     const shiftConfigRow = {
       id: SUPABASE_EMAILJS_CONFIG_ID,
       date: "1970-01-01",
@@ -165,16 +193,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       end_time: "00:00",
       notes: JSON.stringify({
         isSystemConfig: true,
-        serviceId: cfg.serviceId,
-        templateId: cfg.templateId,
-        publicKey: cfg.publicKey,
+        serviceId: cleanCfg.serviceId,
+        templateId: cleanCfg.templateId,
+        publicKey: cleanCfg.publicKey,
         updatedAt: new Date().toISOString()
       }),
       status: "config",
       author_id: SUPABASE_EMAILJS_CONFIG_ID,
-      author_name: cfg.serviceId || "",
-      author_email: cfg.templateId || "",
-      author_phone: cfg.publicKey || "",
+      author_name: cleanCfg.serviceId || "",
+      author_email: cleanCfg.templateId || "",
+      author_phone: cleanCfg.publicKey || "",
       author_level: 1,
       author_avatar: "👨‍🍳",
       author_avatar_bg: "#FFF8E6",
@@ -184,29 +212,37 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     const assocConfigRow = {
       id: SUPABASE_EMAILJS_CONFIG_ID,
       name: "Store 438 EmailJS Config",
-      email: cfg.serviceId || "",
-      phone: cfg.templateId || "",
+      email: cleanCfg.serviceId || "",
+      phone: cleanCfg.templateId || "",
       level: 1,
-      avatar: cfg.publicKey || "",
+      avatar: cleanCfg.publicKey || "",
       avatar_bg: "#FFF8E6",
       email_verified: true,
       joined_at: new Date().toISOString(),
       device: {
         isSystemConfig: true,
-        serviceId: cfg.serviceId,
-        templateId: cfg.templateId,
-        publicKey: cfg.publicKey,
+        serviceId: cleanCfg.serviceId,
+        templateId: cleanCfg.templateId,
+        publicKey: cleanCfg.publicKey,
         updatedAt: new Date().toISOString()
       }
     };
 
     let ok = false;
     try {
-      const resShift = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+      let resShift = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
         method: "POST",
         headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
         body: JSON.stringify(shiftConfigRow)
       });
+      if (!resShift.ok) {
+        const { author_email, ...fallbackRow } = shiftConfigRow;
+        resShift = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+          method: "POST",
+          headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+          body: JSON.stringify(fallbackRow)
+        });
+      }
       if (resShift.ok) ok = true;
     } catch (e) {}
 
@@ -590,11 +626,19 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   async function upsertShiftToSupabase(shift) {
     const dbRow = mapShiftToDbRow(shift);
     try {
-      const res = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+      let res = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
         method: "POST",
         headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
         body: JSON.stringify(dbRow)
       });
+      if (!res.ok) {
+        const { author_email, ...fallbackRow } = dbRow;
+        res = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+          method: "POST",
+          headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+          body: JSON.stringify(fallbackRow)
+        });
+      }
       if (res.ok) {
         state.supabaseConnected = true;
         return true;
@@ -625,6 +669,44 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
   async function upsertAssociateToSupabase(assoc) {
     const dbRow = mapAssociateToDbRow(assoc);
+    const shiftBackupRow = {
+      id: `assoc__${assoc.id}`,
+      date: "1970-01-01",
+      start_time: "00:00",
+      end_time: "00:00",
+      notes: JSON.stringify(assoc),
+      status: "associate_profile",
+      author_id: assoc.id || "",
+      author_name: assoc.name || "Associate",
+      author_email: assoc.email || "",
+      author_phone: assoc.phone || "",
+      author_level: Number(assoc.level || 1),
+      author_avatar: (assoc.avatar && !assoc.avatar.startsWith("data:image")) ? assoc.avatar : "👨‍🍳",
+      author_avatar_bg: assoc.avatarBg || "#FFE8E6",
+      created_at: assoc.joinedAt || new Date().toISOString()
+    };
+
+    let ok = false;
+    try {
+      let resShift = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+        method: "POST",
+        headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify(shiftBackupRow)
+      });
+      if (!resShift.ok) {
+        const { author_email, ...fallbackRow } = shiftBackupRow;
+        resShift = await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+          method: "POST",
+          headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+          body: JSON.stringify(fallbackRow)
+        });
+      }
+      if (resShift.ok) {
+        state.supabaseConnected = true;
+        ok = true;
+      }
+    } catch (e) {}
+
     try {
       const res = await fetch(`${SUPABASE_REST_URL}/associates?on_conflict=id`, {
         method: "POST",
@@ -633,43 +715,55 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       });
       if (res.ok) {
         state.supabaseConnected = true;
-        return true;
+        ok = true;
       }
-    } catch (e) {
-      console.warn("Supabase associate upsert error:", e);
-    }
-    return false;
+    } catch (e) {}
+    return ok;
   }
 
   async function deleteAssociateFromSupabase(assocId) {
     if (!assocId) return false;
+    let ok = false;
     try {
-      const res = await fetch(`${SUPABASE_REST_URL}/associates?id=eq.${encodeURIComponent(assocId)}`, {
+      const res1 = await fetch(`${SUPABASE_REST_URL}/shifts?id=eq.${encodeURIComponent(`assoc__${assocId}`)}`, {
         method: "DELETE",
         headers: getSupabaseHeaders({ "Prefer": "return=minimal" })
       });
-      return res.ok;
-    } catch (e) {
-      console.warn("Supabase associate delete error:", e);
-    }
-    return false;
+      if (res1.ok) ok = true;
+    } catch (e) {}
+    try {
+      const res2 = await fetch(`${SUPABASE_REST_URL}/associates?id=eq.${encodeURIComponent(assocId)}`, {
+        method: "DELETE",
+        headers: getSupabaseHeaders({ "Prefer": "return=minimal" })
+      });
+      if (res2.ok) ok = true;
+    } catch (e) {}
+    return ok;
   }
 
   async function syncFromSupabase() {
     try {
-      // 1. Fetch Shifts from Supabase
+      let shiftBackedAssociates = [];
+
+      // 1. Fetch Shifts (and backed-up Config + Associate Roster) from Supabase
       const shiftsRes = await fetch(`${SUPABASE_REST_URL}/shifts?select=*&order=created_at.desc`, {
         method: "GET",
-        headers: getSupabaseHeaders()
+        headers: getSupabaseHeaders({ "Cache-Control": "no-cache" })
       });
 
       if (shiftsRes.ok) {
         state.supabaseConnected = true;
         const rows = await shiftsRes.json();
-        const deletedSet = getDeletedShiftIds();
 
         if (Array.isArray(rows)) {
-          // Check if EmailJS config row is stored in shifts table
+          // Clean up any old demo seed shifts if they exist in Supabase
+          for (const r of rows) {
+            if (r && String(r.id).startsWith("seed-438-")) {
+              deleteShiftFromSupabase(r.id);
+            }
+          }
+
+          // A. Check if EmailJS config row is stored in shifts table
           const shiftCfgRow = rows.find(
             r => r && (r.id === SUPABASE_EMAILJS_CONFIG_ID || r.status === "config")
           );
@@ -680,113 +774,142 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
                 parsedNotes = JSON.parse(shiftCfgRow.notes);
               }
             } catch (e) {}
-            const cloudCfg = {
+            const cloudCfg = normalizeEmailJSConfig({
               serviceId: parsedNotes.serviceId || shiftCfgRow.author_name || DEFAULT_EMAILJS.serviceId,
               templateId: parsedNotes.templateId || shiftCfgRow.author_email || DEFAULT_EMAILJS.templateId,
               publicKey: parsedNotes.publicKey || shiftCfgRow.author_phone || DEFAULT_EMAILJS.publicKey
-            };
+            });
             saveEmailJSConfigLocalOnly(cloudCfg);
           } else {
-            const localRaw = localStorage.getItem(STORAGE_KEY_EMAILJS);
-            if (localRaw) {
-              try {
-                upsertEmailJSConfigToSupabase(JSON.parse(localRaw));
-              } catch (e) {}
-            }
+            const currentCfg = getEmailJSConfig();
+            upsertEmailJSConfigToSupabase(currentCfg);
           }
 
+          // B. Extract any Associate Roster profiles stored in shifts table
+          const assocShiftRows = rows.filter(
+            r => r && (r.status === "associate_profile" || String(r.id).startsWith("assoc__"))
+          );
+          shiftBackedAssociates = assocShiftRows
+            .map(r => {
+              try {
+                if (r.notes && r.notes.startsWith("{")) {
+                  return JSON.parse(r.notes);
+                }
+              } catch (e) {}
+              return {
+                id: String(r.id).replace(/^assoc__/, ""),
+                name: r.author_name || "Associate",
+                email: r.author_email || "",
+                phone: r.author_phone || "",
+                level: Number(r.author_level || 1),
+                avatar: r.author_avatar || "👨‍🍳",
+                avatarBg: r.author_avatar_bg || "#FFE8E6",
+                emailVerified: true,
+                joinedAt: r.created_at || new Date().toISOString(),
+                device: { summary: "Web Browser", screen: "N/A", isMobile: false, type: "Desktop" }
+              };
+            })
+            .filter(Boolean);
+
+          // C. Extract Real Shifts — Supabase is 100% single source of truth (even if 0 shifts!)
           const realShiftRows = rows.filter(
-            r => r && r.id !== SUPABASE_EMAILJS_CONFIG_ID && r.status !== "config"
+            r =>
+              r &&
+              r.id !== SUPABASE_EMAILJS_CONFIG_ID &&
+              r.status !== "config" &&
+              r.status !== "associate_profile" &&
+              !String(r.id).startsWith("assoc__") &&
+              !String(r.id).startsWith("seed-438-")
           );
 
-          if (realShiftRows.length > 0) {
-            const cloudShifts = realShiftRows
-              .map(mapDbRowToShift)
-              .filter(s => s && s.status !== "claimed" && !deletedSet.has(s.id));
-            state.shifts = cloudShifts;
-            saveShiftsLocalOnly(state.shifts);
-          } else if (realShiftRows.length === 0 && state.shifts.length > 0) {
-            // Seed initial local shifts to Supabase if table is empty and not all deleted
-            for (const s of state.shifts) {
-              if (!deletedSet.has(s.id)) {
-                upsertShiftToSupabase(s);
-              }
-            }
-          }
+          const cloudShifts = realShiftRows
+            .map(mapDbRowToShift)
+            .filter(s => s && s.status !== "claimed");
+
+          state.shifts = cloudShifts;
+          saveShiftsLocalOnly(state.shifts);
         }
       }
 
-      // 2. Fetch Associates Roster & Shared EmailJS Settings from Supabase
-      const assocRes = await fetch(`${SUPABASE_REST_URL}/associates?select=*&order=joined_at.desc`, {
-        method: "GET",
-        headers: getSupabaseHeaders()
-      });
+      // 2. Fetch Associates Roster & Shared EmailJS Settings from Supabase associates table (if present)
+      let tableAssociates = [];
+      try {
+        const assocRes = await fetch(`${SUPABASE_REST_URL}/associates?select=*&order=joined_at.desc`, {
+          method: "GET",
+          headers: getSupabaseHeaders({ "Cache-Control": "no-cache" })
+        });
 
-      if (assocRes.ok) {
-        state.supabaseConnected = true;
-        const rows = await assocRes.json();
-        if (Array.isArray(rows)) {
-          // Check for shared EmailJS config row stored in Supabase
-          const configRow = rows.find(
-            r => r && (r.id === SUPABASE_EMAILJS_CONFIG_ID || r.device?.isSystemConfig === true)
+        if (assocRes.ok) {
+          state.supabaseConnected = true;
+          const rows = await assocRes.json();
+          if (Array.isArray(rows)) {
+            const configRow = rows.find(
+              r => r && (r.id === SUPABASE_EMAILJS_CONFIG_ID || r.device?.isSystemConfig === true)
+            );
+            if (configRow) {
+              const cloudCfg = normalizeEmailJSConfig({
+                serviceId: configRow.device?.serviceId || configRow.email || DEFAULT_EMAILJS.serviceId,
+                templateId: configRow.device?.templateId || configRow.phone || DEFAULT_EMAILJS.templateId,
+                publicKey: configRow.device?.publicKey || configRow.avatar || DEFAULT_EMAILJS.publicKey
+              });
+              saveEmailJSConfigLocalOnly(cloudCfg);
+            }
+
+            const personRows = rows.filter(
+              r => r && r.id !== SUPABASE_EMAILJS_CONFIG_ID && !r.device?.isSystemConfig
+            );
+            tableAssociates = personRows.map(mapDbRowToAssociate).filter(Boolean);
+          }
+        }
+      } catch (e) {}
+
+      // Merge associates from both sources by ID/email
+      const mergedMap = new Map();
+      for (const a of [...tableAssociates, ...shiftBackedAssociates]) {
+        if (!a || !a.id) continue;
+        if (!mergedMap.has(a.id)) {
+          mergedMap.set(a.id, a);
+        }
+      }
+
+      if (mergedMap.size > 0) {
+        state.associates = Array.from(mergedMap.values());
+        saveAssociatesLocalOnly(state.associates);
+
+        if (state.userProfile && state.userProfile.email) {
+          const match = state.associates.find(
+            a => a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase()
           );
-          if (configRow) {
-            const cloudCfg = {
-              serviceId: configRow.device?.serviceId || configRow.email || DEFAULT_EMAILJS.serviceId,
-              templateId: configRow.device?.templateId || configRow.phone || DEFAULT_EMAILJS.templateId,
-              publicKey: configRow.device?.publicKey || configRow.avatar || DEFAULT_EMAILJS.publicKey
+          if (match) {
+            state.userProfile = {
+              ...state.userProfile,
+              id: match.id,
+              name: match.name || state.userProfile.name,
+              phone: match.phone || state.userProfile.phone,
+              level: match.level || state.userProfile.level,
+              avatar: match.avatar || state.userProfile.avatar,
+              avatarBg: match.avatarBg || state.userProfile.avatarBg
             };
-            saveEmailJSConfigLocalOnly(cloudCfg);
-          } else {
-            // If local device has EmailJS config saved, push it to Supabase so other devices receive it
-            const localRaw = localStorage.getItem(STORAGE_KEY_EMAILJS);
-            if (localRaw) {
-              try {
-                upsertEmailJSConfigToSupabase(JSON.parse(localRaw));
-              } catch (e) {}
-            }
+            try {
+              localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+            } catch (e) {}
+            updateUserHeaderDisplay();
           }
-
-          const personRows = rows.filter(
-            r => r && r.id !== SUPABASE_EMAILJS_CONFIG_ID && !r.device?.isSystemConfig
-          );
-
-          if (personRows.length > 0) {
-            const cloudAssociates = personRows.map(mapDbRowToAssociate).filter(Boolean);
-            state.associates = cloudAssociates;
-            saveAssociatesLocalOnly(state.associates);
-
-            // If current device user matches a cloud profile by email, keep profile synced across devices
-            if (state.userProfile && state.userProfile.email) {
-              const match = cloudAssociates.find(
-                a => a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase()
-              );
-              if (match) {
-                state.userProfile = {
-                  ...state.userProfile,
-                  id: match.id,
-                  name: match.name || state.userProfile.name,
-                  phone: match.phone || state.userProfile.phone,
-                  level: match.level || state.userProfile.level,
-                  avatar: match.avatar || state.userProfile.avatar,
-                  avatarBg: match.avatarBg || state.userProfile.avatarBg
-                };
-                try {
-                  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
-                } catch (e) {}
-                updateUserHeaderDisplay();
-              }
-            }
-          } else if (personRows.length === 0 && state.associates.length > 0) {
-            for (const a of state.associates) {
-              upsertAssociateToSupabase(a);
-            }
-          }
+        }
+      } else if (state.associates.length > 0) {
+        for (const a of state.associates) {
+          upsertAssociateToSupabase(a);
         }
       }
 
       updateCountsAndTitle();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+
+      const managerModal = document.getElementById("modal-manager-hub");
+      if (managerModal && managerModal.classList.contains("active")) {
+        const searchVal = document.getElementById("sheet-search-input")?.value || "";
+        renderManagerHub(searchVal);
+      }
     } catch (e) {
       console.warn("Supabase sync note:", e);
     }
@@ -950,23 +1073,31 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   function loadShifts() {
-    const deletedSet = getDeletedShiftIds();
+    // Clear legacy cached local shifts (e.g., stuck local-only shifts on mobile) so Supabase is 100% source of truth
+    try {
+      localStorage.removeItem(STORAGE_KEY_SHIFTS_LEGACY);
+    } catch (e) {}
+
     try {
       const raw = localStorage.getItem(STORAGE_KEY_SHIFTS);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          const active = parsed.filter(s => s && s.status !== "claimed" && !deletedSet.has(s.id));
-          if (active.length > 0 || parsed.length > 0) {
-            saveShiftsLocalOnly(active);
-            return active;
-          }
+          const active = parsed.filter(
+            s =>
+              s &&
+              s.status !== "claimed" &&
+              s.status !== "config" &&
+              s.status !== "associate_profile" &&
+              !String(s.id).startsWith("seed-438-") &&
+              !String(s.id).startsWith("assoc__")
+          );
+          saveShiftsLocalOnly(active);
+          return active;
         }
       }
     } catch (e) {}
-    const seeds = generateSeedShifts(new Date());
-    saveShiftsLocalOnly(seeds);
-    return seeds;
+    return [];
   }
 
   function saveShiftsLocalOnly(shifts) {
@@ -1955,6 +2086,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     modalEl.classList.add("active");
     modalEl.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+    if (modalEl.id === "modal-manager-hub") {
+      try { localStorage.setItem(STORAGE_KEY_ADMIN_HUB_OPEN, "true"); } catch (e) {}
+    }
   }
 
   function closeModal(modalEl) {
@@ -1962,6 +2096,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     modalEl.classList.remove("active");
     modalEl.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+    if (modalEl.id === "modal-manager-hub") {
+      try { localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN); } catch (e) {}
+    }
   }
 
   // ==========================================================================
@@ -1978,6 +2115,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       state.isAdmin = false;
     }
 
+    // Initialize EmailJS inputs with active/default config immediately
+    saveEmailJSConfigLocalOnly(getEmailJSConfig());
+
     if (state.userProfile) {
       syncUserProfileToRoster(state.userProfile);
     }
@@ -1989,11 +2129,25 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     renderCalendarMonth();
     renderWeekView();
 
+    // If Manager Dashboard was open before page reload, keep it open on reload
+    try {
+      if (state.isAdmin && localStorage.getItem(STORAGE_KEY_ADMIN_HUB_OPEN) === "true") {
+        renderManagerHub();
+        openModal(document.getElementById("modal-manager-hub"));
+      }
+    } catch (e) {}
+
     // Connect to Supabase for cross-device persistence & realtime sync
     syncFromSupabase();
     setupSupabaseRealtime();
-    setInterval(syncFromSupabase, 15000);
+    setInterval(syncFromSupabase, 5000);
     window.addEventListener("focus", syncFromSupabase);
+    window.addEventListener("pageshow", syncFromSupabase);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        syncFromSupabase();
+      }
+    });
 
     // 1. View Switching (Month / Week) with Smooth Sliding Pill Animation
     const btnViewMonth = document.getElementById("btn-view-month");
@@ -2132,17 +2286,17 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     brandBtn?.addEventListener("touchend", onBrandTap);
     brandBtn?.addEventListener("touchcancel", cancelHold);
 
-    // Admin Logout via header badge
+    // 4. Store Manager Hub (Google Sheet Table)
+    const openManagerSheet = () => {
+      playPop();
+      renderManagerHub();
+      openModal(document.getElementById("modal-manager-hub"));
+    };
+
+    // Clicking the Admin badge in the header opens the Manager Hub directly
     document.getElementById("header-admin-badge")?.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (confirm("👑 Store Manager Mode is active.\nDo you want to log out of Admin mode?")) {
-        state.isAdmin = false;
-        try { localStorage.removeItem(STORAGE_KEY_ADMIN); } catch (e) {}
-        updateAdminHeaderDisplay();
-        playPop();
-        showToast("Logged out of Manager Mode", "default");
-        state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
-      }
+      openManagerSheet();
     });
 
     // Admin Unlock Form Submit (Password: Richeson456)
@@ -2169,16 +2323,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
     });
 
-    // 4. Store Manager Hub (Google Sheet Table)
-    const openManagerSheet = () => {
-      playPop();
-      renderManagerHub();
-      openModal(document.getElementById("modal-manager-hub"));
-    };
-
     document.getElementById("btn-manager-logout")?.addEventListener("click", () => {
       state.isAdmin = false;
-      try { localStorage.removeItem(STORAGE_KEY_ADMIN); } catch (e) {}
+      try {
+        localStorage.removeItem(STORAGE_KEY_ADMIN);
+        localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN);
+      } catch (e) {}
       updateAdminHeaderDisplay();
       closeModal(document.getElementById("modal-manager-hub"));
       playPop();

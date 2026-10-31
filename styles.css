@@ -1566,10 +1566,12 @@ body::before {
 .form-group input,
 .form-group select,
 .form-group textarea {
+  display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  margin: 0;
   padding: 0.75rem 0.9rem;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--surface-border);
@@ -1581,11 +1583,41 @@ body::before {
   transition: var(--trans-spring);
 }
 
-/* Enforce WebKit internal date & time pseudo-elements stay 16px to stop iOS zoom */
+/* Specific resets for Date and Time inputs so they never poke out */
+.form-group input[type="date"],
+.form-group input[type="time"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0.75rem 0.85rem;
+  min-height: 48px;
+  line-height: normal;
+  background-color: #FFFFFF;
+}
+
+/* Enforce WebKit internal date & time pseudo-elements stay 16px and fill cleanly */
 input::-webkit-date-and-time-value {
+  display: block;
+  width: 100%;
   font-size: 16px;
   min-height: 1.25em;
   text-align: left;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  opacity: 0.75;
 }
 
 .form-group input:focus,
@@ -3584,11 +3616,11 @@ input::-webkit-date-and-time-value {
     right: 1rem;
   }
 
-  /* Mobile 2-column inputs: ensure columns shrink cleanly without horizontal blowout */
+  /* Stack 2-column inputs vertically on mobile so inputs are never cramped */
   .form-row-2 {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 0.65rem;
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
     width: 100%;
     max-width: 100%;
   }
@@ -3600,12 +3632,17 @@ input::-webkit-date-and-time-value {
 
   .form-group input[type="time"],
   .form-group input[type="date"] {
-    padding: 0.72rem 0.55rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    display: block;
+    padding: 0.75rem 0.85rem;
     font-size: 16px !important;
-    min-height: 44px;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
+    min-height: 48px;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
   }
 
   /* Prevent iOS Safari auto-zoom on input focus */

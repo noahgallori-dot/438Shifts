@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=438.31">
+  <link rel="stylesheet" href="styles.css?v=438.30">
   <!-- EmailJS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <!-- Supabase JS SDK (Cross-Device Cloud Sync) -->
@@ -220,12 +220,8 @@
             <div class="weekday-col">FRI</div>
             <div class="weekday-col">SAT</div>
           </div>
-          <div class="swipe-track-viewport" id="calendar-swipe-viewport">
-            <div class="swipe-track" id="calendar-swipe-track">
-              <div id="calendar-days-grid-prev" class="calendar-days-grid swipe-panel swipe-panel-prev" aria-hidden="true"></div>
-              <div id="calendar-days-grid" class="calendar-days-grid swipe-panel swipe-panel-current"></div>
-              <div id="calendar-days-grid-next" class="calendar-days-grid swipe-panel swipe-panel-next" aria-hidden="true"></div>
-            </div>
+          <div id="calendar-days-grid" class="calendar-days-grid">
+            <!-- Rendered by JS -->
           </div>
         </div>
 
@@ -248,11 +244,9 @@
 
       <!-- Weekly Schedule View -->
       <div id="week-view" class="view-container">
-        <div class="week-schedule-wrapper swipe-track-viewport" id="week-swipe-viewport">
-          <div class="swipe-track" id="week-swipe-track">
-            <div id="week-columns-grid-prev" class="week-columns-grid swipe-panel swipe-panel-prev" aria-hidden="true"></div>
-            <div id="week-columns-grid" class="week-columns-grid swipe-panel swipe-panel-current"></div>
-            <div id="week-columns-grid-next" class="week-columns-grid swipe-panel swipe-panel-next" aria-hidden="true"></div>
+        <div class="week-schedule-wrapper">
+          <div id="week-columns-grid" class="week-columns-grid">
+            <!-- Rendered 7 day columns by JS -->
           </div>
         </div>
       </div>
@@ -906,7 +900,7 @@
   <!-- Confetti Canvas -->
   <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
 
-  <script src="app.js?v=438.31"></script>
+  <script src="app.js?v=438.30"></script>
 </body>
 
 </html>

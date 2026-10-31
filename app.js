@@ -2804,7 +2804,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     bottomNavMonth?.addEventListener("click", () => setView("month"));
     bottomNavWeek?.addEventListener("click", () => setView("week"));
 
-    // 2. Date Navigation Controls & Calendar / Week Swipe
+    // 2. Date Navigation Controls & Interactive Thumb-Tracking Calendar / Week Drag
+    let isAnimatingPeriod = false;
+
     function triggerSlideAnimation(el, animClass) {
       if (!el) return;
       el.classList.remove("swipe-next", "swipe-prev");
@@ -2812,48 +2814,104 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       el.classList.add(animClass);
     }
 
-    function stepPeriod(direction) {
-      playPop();
-      const animClass = direction > 0 ? "swipe-next" : "swipe-prev";
-
+    function applyPeriodChange(direction) {
       if (state.currentView === "month") {
         state.userSelectedCalendarDay = false;
         state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + direction, 1);
       } else {
         state.activeDate.setDate(state.activeDate.getDate() + direction * 7);
       }
-
       updateCountsAndTitle();
       renderCalendarMonth();
       renderWeekView();
-
-      const periodTitle = document.getElementById("current-period-title");
-      const calGrid = document.getElementById("calendar-days-grid");
-      const dayPanel = document.getElementById("selected-day-panel");
-      const weekGrid = document.getElementById("week-columns-grid");
-
-      triggerSlideAnimation(periodTitle, animClass);
-      if (state.currentView === "month") {
-        triggerSlideAnimation(calGrid, animClass);
-        triggerSlideAnimation(dayPanel, animClass);
-      } else {
-        triggerSlideAnimation(weekGrid, animClass);
-      }
     }
 
-    document.getElementById("btn-nav-prev")?.addEventListener("click", () => stepPeriod(-1));
-    document.getElementById("btn-nav-next")?.addEventListener("click", () => stepPeriod(1));
+    function stepPeriod(direction, releaseVelocity = 1.4, currentDragX = 0) {
+      if (isAnimatingPeriod) return;
+      playPop();
 
-    // Horizontal swipe on Month Calendar & Week View to change months or weeks
+      const activeGrid = state.currentView === "month"
+        ? document.getElementById("calendar-days-grid")
+        : document.getElementById("week-columns-grid");
+      const periodTitle = document.getElementById("current-period-title");
+      const dayPanel = document.getElementById("selected-day-panel");
+      const animClass = direction > 0 ? "swipe-next" : "swipe-prev";
+
+      if (!activeGrid) {
+        applyPeriodChange(direction);
+        return;
+      }
+
+      isAnimatingPeriod = true;
+      activeGrid.classList.remove("swipe-next", "swipe-prev");
+
+      const width = activeGrid.offsetWidth || 340;
+      const speed = Math.max(0.65, Math.min(3.8, Math.abs(releaseVelocity)));
+      const remainingDist = Math.max(40, width * 0.65 - Math.abs(currentDragX));
+      const exitMs = currentDragX !== 0
+        ? Math.round(Math.max(65, Math.min(170, remainingDist / speed)))
+        : 120;
+      const enterMs = Math.round(Math.max(150, Math.min(310, exitMs * 1.75)));
+
+      const exitX = direction > 0 ? -Math.round(width * 0.65) : Math.round(width * 0.65);
+      const enterStartX = direction > 0 ? Math.round(width * 0.55) : -Math.round(width * 0.55);
+
+      activeGrid.style.transition = `transform ${exitMs}ms cubic-bezier(0.32, 0.72, 0, 1), opacity ${exitMs}ms ease-out`;
+      activeGrid.style.transform = `translate3d(${exitX}px, 0, 0)`;
+      activeGrid.style.opacity = "0";
+
+      setTimeout(() => {
+        applyPeriodChange(direction);
+        triggerSlideAnimation(periodTitle, animClass);
+        if (state.currentView === "month") {
+          triggerSlideAnimation(dayPanel, animClass);
+        }
+
+        const updatedGrid = state.currentView === "month"
+          ? document.getElementById("calendar-days-grid")
+          : document.getElementById("week-columns-grid");
+
+        if (updatedGrid) {
+          updatedGrid.classList.remove("swipe-next", "swipe-prev");
+          updatedGrid.style.transition = "none";
+          updatedGrid.style.transform = `translate3d(${enterStartX}px, 0, 0)`;
+          updatedGrid.style.opacity = "0.2";
+          void updatedGrid.offsetWidth;
+
+          updatedGrid.style.transition = `transform ${enterMs}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${enterMs}ms ease-out`;
+          updatedGrid.style.transform = "translate3d(0, 0, 0)";
+          updatedGrid.style.opacity = "1";
+
+          setTimeout(() => {
+            if (updatedGrid) {
+              updatedGrid.style.transition = "";
+              updatedGrid.style.transform = "";
+              updatedGrid.style.opacity = "";
+            }
+            isAnimatingPeriod = false;
+          }, enterMs + 20);
+        } else {
+          isAnimatingPeriod = false;
+        }
+      }, exitMs);
+    }
+
+    document.getElementById("btn-nav-prev")?.addEventListener("click", () => stepPeriod(-1, 1.5, 0));
+    document.getElementById("btn-nav-next")?.addEventListener("click", () => stepPeriod(1, 1.5, 0));
+
+    // Interactive 1:1 thumb-following drag on Month Calendar & Week View
     function attachPeriodSwipeGesture(containerEl) {
       if (!containerEl) return;
       let startX = 0;
       let startY = 0;
       let lastX = 0;
       let lastY = 0;
-      let startTime = 0;
+      let prevX = 0;
+      let prevTime = 0;
+      let velocityX = 0;
       let isTracking = false;
       let isHorizontal = null;
+      let currentDragX = 0;
 
       function getActiveGridEl() {
         return state.currentView === "month"
@@ -2861,92 +2919,142 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           : document.getElementById("week-columns-grid");
       }
 
-      function resetDragPreview() {
+      function computeRubberBandDrag(dx) {
+        const abs = Math.abs(dx);
+        const sign = dx < 0 ? -1 : 1;
+        if (abs <= 110) return dx * 0.92;
+        return sign * (110 * 0.92 + (abs - 110) * 0.52);
+      }
+
+      function beginDrag(clientX, clientY) {
+        if (isAnimatingPeriod) return;
+        startX = clientX;
+        startY = clientY;
+        lastX = clientX;
+        lastY = clientY;
+        prevX = clientX;
+        prevTime = performance.now();
+        velocityX = 0;
+        currentDragX = 0;
+        isTracking = true;
+        isHorizontal = null;
+
         const gridEl = getActiveGridEl();
         if (gridEl) {
-          gridEl.style.transition = "";
-          gridEl.style.transform = "";
+          gridEl.classList.remove("swipe-next", "swipe-prev");
+          gridEl.style.transition = "none";
+        }
+      }
+
+      function moveDrag(clientX, clientY, eventObj) {
+        if (!isTracking || isAnimatingPeriod) return;
+        const now = performance.now();
+        const dt = now - prevTime;
+        if (dt > 4) {
+          const instVel = (clientX - prevX) / dt;
+          velocityX = velocityX * 0.4 + instVel * 0.6;
+          prevX = clientX;
+          prevTime = now;
+        }
+
+        lastX = clientX;
+        lastY = clientY;
+        const dx = lastX - startX;
+        const dy = lastY - startY;
+
+        if (isHorizontal === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+          if (state.currentView === "week" && window.innerWidth > 768 && containerEl.scrollWidth > containerEl.clientWidth) {
+            isHorizontal = false;
+          } else {
+            isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.05;
+          }
+        }
+
+        if (isHorizontal === true) {
+          if (eventObj && eventObj.cancelable) eventObj.preventDefault();
+          currentDragX = computeRubberBandDrag(dx);
+          const gridEl = getActiveGridEl();
+          if (gridEl) {
+            const width = gridEl.offsetWidth || 340;
+            const fade = Math.max(0.55, 1 - Math.abs(currentDragX) / (width * 1.35));
+            gridEl.style.transition = "none";
+            gridEl.style.transform = `translate3d(${currentDragX.toFixed(1)}px, 0, 0)`;
+            gridEl.style.opacity = fade.toFixed(3);
+          }
+        }
+      }
+
+      function endDrag() {
+        if (!isTracking) return;
+        isTracking = false;
+
+        if (isHorizontal !== true) {
+          isHorizontal = null;
+          return;
+        }
+        isHorizontal = null;
+
+        const dx = lastX - startX;
+        const gridEl = getActiveGridEl();
+        const width = gridEl ? (gridEl.offsetWidth || 340) : 340;
+        const distThreshold = Math.min(68, width * 0.19);
+        const isFastFlick = Math.abs(velocityX) > 0.48 && Math.abs(dx) > 22 && (dx * velocityX > 0);
+        const isPulledFarEnough = Math.abs(dx) > distThreshold;
+
+        if (Math.abs(dx) > 8) {
+          state.didJustSwipe = true;
+          setTimeout(() => { state.didJustSwipe = false; }, 240);
+        }
+
+        if (isPulledFarEnough || isFastFlick) {
+          const direction = dx < 0 ? 1 : -1;
+          stepPeriod(direction, Math.abs(velocityX), currentDragX);
+        } else if (gridEl) {
+          // Spring back smoothly to center if user didn't pull far enough
+          gridEl.style.transition = "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease";
+          gridEl.style.transform = "translate3d(0, 0, 0)";
+          gridEl.style.opacity = "1";
+          setTimeout(() => {
+            if (gridEl && !isTracking && !isAnimatingPeriod) {
+              gridEl.style.transition = "";
+              gridEl.style.transform = "";
+              gridEl.style.opacity = "";
+            }
+          }, 310);
         }
       }
 
       containerEl.addEventListener("touchstart", (e) => {
         if (!e.touches || e.touches.length !== 1) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        lastX = startX;
-        lastY = startY;
-        startTime = Date.now();
-        isTracking = true;
-        isHorizontal = null;
+        beginDrag(e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: true });
 
       containerEl.addEventListener("touchmove", (e) => {
-        if (!isTracking || !e.touches || e.touches.length !== 1) return;
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-        const dx = lastX - startX;
-        const dy = lastY - startY;
-
-        if (isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-          // On desktop week view (>768px) if horizontally scrollable, don't hijack native scroll
-          if (state.currentView === "week" && window.innerWidth > 768 && containerEl.scrollWidth > containerEl.clientWidth) {
-            isHorizontal = false;
-          } else {
-            isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.1;
-          }
-        }
-
-        if (isHorizontal === true) {
-          if (e.cancelable) e.preventDefault();
-          const gridEl = getActiveGridEl();
-          if (gridEl) {
-            gridEl.style.transition = "none";
-            gridEl.style.transform = `translateX(${Math.max(-60, Math.min(60, dx * 0.35))}px)`;
-          }
-        }
+        if (!e.touches || e.touches.length !== 1) return;
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
       }, { passive: false });
 
-      function finishTouchSwipe() {
-        if (!isTracking) return;
-        isTracking = false;
-        resetDragPreview();
-        const dx = lastX - startX;
-        const dy = lastY - startY;
-        const elapsed = Date.now() - startTime;
+      containerEl.addEventListener("touchend", endDrag, { passive: true });
+      containerEl.addEventListener("touchcancel", endDrag, { passive: true });
 
-        if (isHorizontal === true && Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(dy) && elapsed < 1000) {
-          state.didJustSwipe = true;
-          setTimeout(() => { state.didJustSwipe = false; }, 220);
-          stepPeriod(dx < 0 ? 1 : -1);
-        }
-        isHorizontal = null;
-      }
-
-      containerEl.addEventListener("touchend", finishTouchSwipe, { passive: true });
-      containerEl.addEventListener("touchcancel", finishTouchSwipe, { passive: true });
-
-      // Pointer drag fallback for desktop mobile-emulator / mouse swipe testing
-      let mouseDown = false;
-      let mouseStartX = 0;
-      let mouseStartY = 0;
-
+      // Mouse drag support so dragging back and forth works with cursor / desktop emulator too
+      let isMouseDown = false;
       containerEl.addEventListener("mousedown", (e) => {
         if (e.button !== 0) return;
-        mouseDown = true;
-        mouseStartX = e.clientX;
-        mouseStartY = e.clientY;
+        if (e.target.closest("button, a, input, select, textarea")) return;
+        isMouseDown = true;
+        beginDrag(e.clientX, e.clientY);
       });
 
-      window.addEventListener("mouseup", (e) => {
-        if (!mouseDown) return;
-        mouseDown = false;
-        const dx = e.clientX - mouseStartX;
-        const dy = e.clientY - mouseStartY;
-        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-          state.didJustSwipe = true;
-          setTimeout(() => { state.didJustSwipe = false; }, 220);
-          stepPeriod(dx < 0 ? 1 : -1);
-        }
+      window.addEventListener("mousemove", (e) => {
+        if (!isMouseDown) return;
+        moveDrag(e.clientX, e.clientY, e);
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (!isMouseDown) return;
+        isMouseDown = false;
+        endDrag();
       });
     }
 

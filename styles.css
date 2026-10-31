@@ -778,26 +778,29 @@ body::before {
   grid-auto-rows: minmax(105px, auto);
   background: var(--surface-border-subtle);
   gap: 1px;
+  will-change: transform, opacity;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .calendar-days-grid.swipe-next,
 .week-columns-grid.swipe-next,
 .selected-day-panel.swipe-next {
-  animation: calendarSwipeNext 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: calendarSwipeNext 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .calendar-days-grid.swipe-prev,
 .week-columns-grid.swipe-prev,
 .selected-day-panel.swipe-prev {
-  animation: calendarSwipePrev 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: calendarSwipePrev 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .current-period-label.swipe-next {
-  animation: periodTitleSlideNext 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: periodTitleSlideNext 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .current-period-label.swipe-prev {
-  animation: periodTitleSlidePrev 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: periodTitleSlidePrev 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes calendarSwipeNext {

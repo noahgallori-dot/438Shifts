@@ -784,11 +784,15 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
             .map(mapDbRowToShift)
             .filter(s => s && s.status !== "claimed");
 
+          const prevShiftsSig = JSON.stringify(state.shifts);
+          const nextShiftsSig = JSON.stringify(cloudShifts);
           state.shifts = cloudShifts;
           saveShiftsLocalOnly(state.shifts);
-          updateCountsAndTitle();
-          renderCalendarMonth();
-          renderWeekView();
+          if (prevShiftsSig !== nextShiftsSig && !state.isSwiping) {
+            updateCountsAndTitle();
+            renderCalendarMonth();
+            renderWeekView();
+          }
         }
       }
 
@@ -884,9 +888,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
             }
           }
 
-      updateCountsAndTitle();
-      renderCalendarMonth();
-      renderWeekView();
+      if (!state.isSwiping && !state.hasRenderedInitialSync) {
+        state.hasRenderedInitialSync = true;
+        updateCountsAndTitle();
+        renderCalendarMonth();
+        renderWeekView();
+      }
 
       const managerModal = document.getElementById("modal-manager-hub");
       if (managerModal && managerModal.classList.contains("active")) {
@@ -1530,9 +1537,28 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   function renderCalendarMonth() {
-    const grid = document.getElementById("calendar-days-grid");
-    if (!grid) return;
-    populateCalendarMonthGrid(grid, state.activeDate, false);
+    const gridPrev = document.getElementById("calendar-days-grid-prev");
+    const gridCurr = document.getElementById("calendar-days-grid");
+    const gridNext = document.getElementById("calendar-days-grid-next");
+    if (!gridCurr) return;
+
+    const year = state.activeDate.getFullYear();
+    const month = state.activeDate.getMonth();
+
+    populateCalendarMonthGrid(gridCurr, state.activeDate, false);
+    if (gridPrev) {
+      populateCalendarMonthGrid(gridPrev, new Date(year, month - 1, 1), true);
+    }
+    if (gridNext) {
+      populateCalendarMonthGrid(gridNext, new Date(year, month + 1, 1), true);
+    }
+
+    const track = document.getElementById("calendar-swipe-track");
+    if (track) {
+      track.style.transition = "none";
+      track.style.transform = "translate3d(-33.333333%, 0, 0)";
+    }
+
     renderSelectedDayPanel();
   }
 
@@ -1745,9 +1771,28 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   function renderWeekView() {
-    const grid = document.getElementById("week-columns-grid");
-    if (!grid) return;
-    populateWeekGrid(grid, state.activeDate);
+    const gridPrev = document.getElementById("week-columns-grid-prev");
+    const gridCurr = document.getElementById("week-columns-grid");
+    const gridNext = document.getElementById("week-columns-grid-next");
+    if (!gridCurr) return;
+
+    populateWeekGrid(gridCurr, state.activeDate);
+    if (gridPrev) {
+      const prevDate = new Date(state.activeDate);
+      prevDate.setDate(prevDate.getDate() - 7);
+      populateWeekGrid(gridPrev, prevDate);
+    }
+    if (gridNext) {
+      const nextDate = new Date(state.activeDate);
+      nextDate.setDate(nextDate.getDate() + 7);
+      populateWeekGrid(gridNext, nextDate);
+    }
+
+    const track = document.getElementById("week-swipe-track");
+    if (track) {
+      track.style.transition = "none";
+      track.style.transform = "translate3d(-33.333333%, 0, 0)";
+    }
   }
 
   // ==========================================================================
@@ -2865,7 +2910,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     document.getElementById("btn-nav-prev")?.addEventListener("click", () => stepPeriod(-1));
     document.getElementById("btn-nav-next")?.addEventListener("click", () => stepPeriod(1));
 
-    // Horizontal swipe on Month Calendar & Week View: 1:1 finger tracking + velocity-matched completion
+    // Horizontal swipe on Month Calendar & Week View: 3-panel pre-rendered track for 60/120fps 1:1 finger tracking
     function attachPeriodSwipeGesture(containerEl) {
       if (!containerEl) return;
       let startX = 0;
@@ -2874,35 +2919,35 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       let lastY = 0;
       let isTracking = false;
       let isHorizontal = null;
-      let previewEl = null;
-      let previewDir = 0;
+      let trackEl = null;
+      let viewportWidth = 360;
       let samples = [];
       let animTimer = null;
       let pendingCommitDir = 0;
 
-      function getActiveGridEl() {
+      function getActiveTrackEl() {
         return state.currentView === "month"
-          ? document.getElementById("calendar-days-grid")
-          : document.getElementById("week-columns-grid");
+          ? document.getElementById("calendar-swipe-track")
+          : document.getElementById("week-swipe-track");
       }
 
-      function cleanupSwipeElements() {
-        if (previewEl) {
-          previewEl.remove();
-          previewEl = null;
-        }
-        document.querySelectorAll(".swipe-preview-grid").forEach(el => el.remove());
-        previewDir = 0;
-        [document.getElementById("calendar-days-grid"), document.getElementById("week-columns-grid")].forEach(g => {
-          if (g) {
-            g.style.transition = "";
-            g.style.transform = "";
-            g.style.willChange = "";
-            if (g.parentElement) {
-              g.parentElement.style.minHeight = "";
-            }
+      function getActiveViewportEl() {
+        return state.currentView === "month"
+          ? document.getElementById("calendar-swipe-viewport")
+          : document.getElementById("week-swipe-viewport");
+      }
+
+      function resetTrackToCenter() {
+        [
+          document.getElementById("calendar-swipe-track"),
+          document.getElementById("week-swipe-track")
+        ].forEach(t => {
+          if (t) {
+            t.style.transition = "none";
+            t.style.transform = "translate3d(-33.333333%, 0, 0)";
           }
         });
+        state.isSwiping = false;
       }
 
       function finishPendingAnimationImmediately() {
@@ -2912,6 +2957,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         }
         const dirToCommit = pendingCommitDir;
         pendingCommitDir = 0;
+        state.isSwiping = false;
 
         if (dirToCommit !== 0) {
           if (state.currentView === "month") {
@@ -2923,15 +2969,19 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           updateCountsAndTitle();
           renderCalendarMonth();
           renderWeekView();
+        } else {
+          resetTrackToCenter();
         }
-
-        cleanupSwipeElements();
       }
 
       function startDrag(clientX, clientY) {
         if (animTimer) {
           finishPendingAnimationImmediately();
         }
+        trackEl = getActiveTrackEl();
+        const viewportEl = getActiveViewportEl();
+        viewportWidth = (viewportEl && viewportEl.clientWidth) || containerEl.clientWidth || 360;
+
         startX = clientX;
         startY = clientY;
         lastX = clientX;
@@ -2939,21 +2989,23 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         isTracking = true;
         isHorizontal = null;
         samples = [{ x: clientX, t: performance.now() }];
+
+        if (trackEl) {
+          trackEl.style.transition = "none";
+        }
       }
 
       function moveDrag(clientX, clientY, event) {
-        if (!isTracking) return;
+        if (!isTracking || !trackEl) return;
         lastX = clientX;
         lastY = clientY;
         const dx = lastX - startX;
         const dy = lastY - startY;
 
-        if (isHorizontal === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-          // On desktop week view (>768px) if horizontally scrollable, don't hijack native scroll
-          if (state.currentView === "week" && window.innerWidth > 768 && containerEl.scrollWidth > containerEl.clientWidth) {
-            isHorizontal = false;
-          } else {
-            isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.05;
+        if (isHorizontal === null && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+          isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.05;
+          if (isHorizontal) {
+            state.isSwiping = true;
           }
         }
 
@@ -2962,114 +3014,64 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
         const now = performance.now();
         samples.push({ x: lastX, t: now });
-        while (samples.length > 2 && now - samples[0].t > 90) {
+        if (samples.length > 6) {
           samples.shift();
         }
 
-        const gridEl = getActiveGridEl();
-        const hostEl = gridEl?.parentElement;
-        if (!gridEl || !hostEl) return;
-
-        const width = gridEl.offsetWidth || hostEl.clientWidth || 360;
-        const gap = state.currentView === "week" ? 14 : 1;
-        const stride = width + gap;
-        const dir = dx < 0 ? 1 : (dx > 0 ? -1 : 0);
-
-        if (dir !== 0 && (!previewEl || previewDir !== dir)) {
-          if (!previewEl) {
-            previewEl = document.createElement("div");
-            hostEl.appendChild(previewEl);
-          }
-          previewEl.className = state.currentView === "month"
-            ? "calendar-days-grid swipe-preview-grid"
-            : "week-columns-grid swipe-preview-grid";
-          previewEl.style.position = "absolute";
-          previewEl.style.top = `${gridEl.offsetTop}px`;
-          previewEl.style.left = `${gridEl.offsetLeft}px`;
-          previewEl.style.width = `${width}px`;
-          previewEl.style.pointerEvents = "none";
-          previewEl.style.zIndex = "3";
-
-          if (state.currentView === "month") {
-            const targetDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + dir, 1);
-            populateCalendarMonthGrid(previewEl, targetDate, true);
-          } else {
-            const targetDate = new Date(state.activeDate);
-            targetDate.setDate(targetDate.getDate() + dir * 7);
-            populateWeekGrid(previewEl, targetDate);
-          }
-          previewDir = dir;
-          const maxH = Math.max(gridEl.offsetHeight, previewEl.offsetHeight);
-          hostEl.style.minHeight = `${gridEl.offsetTop + maxH}px`;
-        }
-
-        gridEl.classList.remove("swipe-next", "swipe-prev");
-        gridEl.style.transition = "none";
-        gridEl.style.willChange = "transform";
-        gridEl.style.transform = `translate3d(${dx}px, 0, 0)`;
-
-        if (previewEl && previewDir !== 0) {
-          previewEl.style.transition = "none";
-          previewEl.style.willChange = "transform";
-          previewEl.style.transform = `translate3d(${dx + previewDir * stride}px, 0, 0)`;
-        }
+        const clampedDx = Math.max(-viewportWidth, Math.min(viewportWidth, dx));
+        trackEl.style.transform = `translate3d(${-viewportWidth + clampedDx}px, 0, 0)`;
       }
 
       function endDrag() {
         if (!isTracking) return;
         isTracking = false;
 
-        if (isHorizontal !== true) {
+        if (isHorizontal !== true || !trackEl) {
           isHorizontal = null;
-          cleanupSwipeElements();
+          state.isSwiping = false;
           return;
         }
         isHorizontal = null;
 
-        const dx = lastX - startX;
-        const gridEl = getActiveGridEl();
-        const hostEl = gridEl?.parentElement;
-        if (!gridEl || !hostEl || Math.abs(dx) < 2) {
-          cleanupSwipeElements();
+        const dx = Math.max(-viewportWidth, Math.min(viewportWidth, lastX - startX));
+        if (Math.abs(dx) < 2) {
+          resetTrackToCenter();
           return;
         }
 
         const now = performance.now();
+        let refIdx = samples.length - 1;
+        while (refIdx > 0 && now - samples[refIdx].t < 55) {
+          refIdx--;
+        }
+        const firstSample = samples[refIdx] || samples[0] || { x: startX, t: now };
         const lastSample = samples[samples.length - 1] || { x: lastX, t: now };
-        const firstSample = samples[0] || { x: startX, t: now };
         let vx = 0; // px per ms
         if (now - lastSample.t < 90 && lastSample.t > firstSample.t) {
           vx = (lastSample.x - firstSample.x) / (lastSample.t - firstSample.t);
         }
 
-        const width = gridEl.offsetWidth || hostEl.clientWidth || 360;
-        const gap = state.currentView === "week" ? 14 : 1;
-        const stride = width + gap;
         const dir = dx < 0 ? 1 : -1;
         const vInDir = dir === 1 ? -vx : vx;
 
         const shouldCommit =
-          (Math.abs(dx) > width * 0.22 && vInDir > -0.15) ||
-          (Math.abs(dx) > 20 && vInDir >= 0.30);
+          (Math.abs(dx) > viewportWidth * 0.20 && vInDir > -0.12) ||
+          (Math.abs(dx) > 18 && vInDir >= 0.28);
 
         state.didJustSwipe = true;
         setTimeout(() => { state.didJustSwipe = false; }, 220);
 
         if (shouldCommit) {
           playPop();
-          const remaining = Math.max(0, stride - Math.abs(dx));
-          const speed = Math.max(0.85, Math.min(3.8, vInDir * 1.1));
-          const durationMs = Math.round(Math.max(60, Math.min(320, remaining / speed)));
-          const easing = "cubic-bezier(0.12, 0.8, 0.32, 1)";
+          const remaining = Math.max(0, viewportWidth - Math.abs(dx));
+          const speed = Math.max(0.95, Math.min(4.0, vInDir * 1.15));
+          const durationMs = Math.round(Math.max(55, Math.min(280, remaining / speed)));
+          const easing = "cubic-bezier(0.15, 0.85, 0.32, 1)";
+          const targetX = -viewportWidth - dir * viewportWidth;
 
-          gridEl.style.transition = `transform ${durationMs}ms ${easing}`;
-          gridEl.style.transform = `translate3d(${-dir * stride}px, 0, 0)`;
-          if (previewEl) {
-            previewEl.style.transition = `transform ${durationMs}ms ${easing}`;
-            previewEl.style.transform = "translate3d(0px, 0, 0)";
-          }
+          trackEl.style.transition = `transform ${durationMs}ms ${easing}`;
+          trackEl.style.transform = `translate3d(${targetX}px, 0, 0)`;
 
-          // Update period title immediately with matching direction animation
           const animClass = dir > 0 ? "swipe-next" : "swipe-prev";
           const nextDate = state.currentView === "month"
             ? new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + dir, 1)
@@ -3090,16 +3092,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           }, durationMs);
         } else {
           const returnDist = Math.abs(dx);
-          const returnSpeed = Math.max(0.9, Math.min(3.0, Math.abs(vx)));
-          const durationMs = Math.round(Math.max(70, Math.min(240, returnDist / returnSpeed)));
+          const returnSpeed = Math.max(0.95, Math.min(3.2, Math.abs(vx)));
+          const durationMs = Math.round(Math.max(65, Math.min(220, returnDist / returnSpeed)));
           const easing = "cubic-bezier(0.16, 1, 0.3, 1)";
 
-          gridEl.style.transition = `transform ${durationMs}ms ${easing}`;
-          gridEl.style.transform = "translate3d(0px, 0, 0)";
-          if (previewEl && previewDir !== 0) {
-            previewEl.style.transition = `transform ${durationMs}ms ${easing}`;
-            previewEl.style.transform = `translate3d(${previewDir * stride}px, 0, 0)`;
-          }
+          trackEl.style.transition = `transform ${durationMs}ms ${easing}`;
+          trackEl.style.transform = `translate3d(${-viewportWidth}px, 0, 0)`;
 
           pendingCommitDir = 0;
           animTimer = setTimeout(() => {

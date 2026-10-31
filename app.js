@@ -1399,7 +1399,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (levelEl) {
       levelEl.textContent = state.userProfile.approved === false
         ? "Pending Approval"
-        : `L${state.userProfile.level}`;
+        : `Level ${state.userProfile.level}`;
     }
     if (avatarEl) {
       avatarEl.innerHTML = renderAvatarMarkup(state.userProfile.avatar, state.userProfile.name);
@@ -1407,10 +1407,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   function updateAdminHeaderDisplay() {
-    const adminBadge = document.getElementById("header-admin-badge");
     const brandBtn = document.getElementById("btn-brand-home");
 
-    if (adminBadge) adminBadge.style.display = state.isAdmin ? "inline-flex" : "none";
     if (brandBtn) {
       brandBtn.title = state.isAdmin
         ? "👑 Store Manager Mode • Tap Logo for Manager Dashboard"
@@ -1580,7 +1578,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const offerAmount = Number(shift.offerAmount) || 0;
       const chip = document.createElement("div");
       chip.className = "mini-shift-chip";
-      chip.title = `${shift.authorName} (L${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""}`;
+      chip.title = `${shift.authorName} (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""}`;
 
       const timeSpan = document.createElement("span");
       timeSpan.className = "mini-shift-time";
@@ -1588,7 +1586,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "mini-shift-name";
-      nameSpan.textContent = `${shift.authorName.split(" ")[0]} (L${shift.authorLevel})`;
+      nameSpan.textContent = `${shift.authorName.split(" ")[0]} (Level ${shift.authorLevel})`;
 
       chip.appendChild(timeSpan);
       chip.appendChild(nameSpan);
@@ -1657,14 +1655,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           <div class="empty-day-icon">${VECTOR_AVATARS["🌴"]}</div>
           <div class="empty-day-title">No Shifts Posted for This Day</div>
           <p class="empty-day-desc">Need coverage for this date? Post your shift to let Store #438 coworkers pick it up or trade!</p>
-          <button id="btn-empty-add-shift" class="btn-primary-action">
-            <span>+ Post Shift For ${formatDateHuman(dateKey)}</span>
-          </button>
         </div>
       `;
-      document.getElementById("btn-empty-add-shift")?.addEventListener("click", () => {
-        openPostShiftModal(dateKey);
-      });
       return;
     }
 
@@ -1747,7 +1739,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     const duration = calculateDurationHours(shift.startTime, shift.endTime);
     const avatarMarkup = renderAvatarMarkup(resolveShiftAvatar(shift), shift.authorName);
 
-    const badgeLabel = isWeekly ? `L${shift.authorLevel}` : `Level ${shift.authorLevel}`;
+    const badgeLabel = `Level ${shift.authorLevel}`;
     const isMine = isShiftOwner(shift);
     const offerAmount = Number(shift.offerAmount) || 0;
 
@@ -2811,32 +2803,65 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     bottomNavMonth?.addEventListener("click", () => setView("month"));
     bottomNavWeek?.addEventListener("click", () => setView("week"));
 
-    // 2. Date Navigation Controls
-    document.getElementById("btn-nav-prev")?.addEventListener("click", () => {
+    // 2. Date Navigation Controls & Calendar Month Swipe
+    function stepPeriod(direction) {
       playPop();
+      const calGrid = document.getElementById("calendar-days-grid");
       if (state.currentView === "month") {
         state.userSelectedCalendarDay = false;
-        state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() - 1, 1);
+        state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + direction, 1);
+        if (calGrid) {
+          calGrid.classList.remove("swipe-next", "swipe-prev");
+          void calGrid.offsetWidth;
+          calGrid.classList.add(direction > 0 ? "swipe-next" : "swipe-prev");
+        }
       } else {
-        state.activeDate.setDate(state.activeDate.getDate() - 7);
+        state.activeDate.setDate(state.activeDate.getDate() + direction * 7);
       }
       updateCountsAndTitle();
       renderCalendarMonth();
       renderWeekView();
-    });
+    }
 
-    document.getElementById("btn-nav-next")?.addEventListener("click", () => {
-      playPop();
-      if (state.currentView === "month") {
-        state.userSelectedCalendarDay = false;
-        state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + 1, 1);
-      } else {
-        state.activeDate.setDate(state.activeDate.getDate() + 7);
-      }
-      updateCountsAndTitle();
-      renderCalendarMonth();
-      renderWeekView();
-    });
+    document.getElementById("btn-nav-prev")?.addEventListener("click", () => stepPeriod(-1));
+    document.getElementById("btn-nav-next")?.addEventListener("click", () => stepPeriod(1));
+
+    // Horizontal swipe on calendar wrapper to change months
+    const calendarWrapper = document.querySelector("#calendar-view .calendar-wrapper");
+    if (calendarWrapper) {
+      let swipeStartX = 0;
+      let swipeStartY = 0;
+      let swipeStartTime = 0;
+      let isTrackingSwipe = false;
+
+      calendarWrapper.addEventListener("touchstart", (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        swipeStartX = e.touches[0].clientX;
+        swipeStartY = e.touches[0].clientY;
+        swipeStartTime = Date.now();
+        isTrackingSwipe = true;
+      }, { passive: true });
+
+      calendarWrapper.addEventListener("touchend", (e) => {
+        if (!isTrackingSwipe || !e.changedTouches || e.changedTouches.length === 0) return;
+        isTrackingSwipe = false;
+        const deltaX = e.changedTouches[0].clientX - swipeStartX;
+        const deltaY = e.changedTouches[0].clientY - swipeStartY;
+        const elapsed = Date.now() - swipeStartTime;
+
+        if (elapsed < 800 && Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+          if (deltaX < 0) {
+            stepPeriod(1);
+          } else {
+            stepPeriod(-1);
+          }
+        }
+      }, { passive: true });
+
+      calendarWrapper.addEventListener("touchcancel", () => {
+        isTrackingSwipe = false;
+      }, { passive: true });
+    }
 
     document.getElementById("btn-nav-today")?.addEventListener("click", () => {
       playPop();
@@ -2910,12 +2935,6 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       renderManagerHub();
       openModal(document.getElementById("modal-manager-hub"));
     };
-
-    // Clicking the Admin badge in the header opens the Manager Hub directly
-    document.getElementById("header-admin-badge")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openManagerSheet();
-    });
 
     // Admin Unlock Form Submit
     document.getElementById("form-admin-login")?.addEventListener("submit", (e) => {
@@ -3125,19 +3144,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (emailConfigPanel) emailConfigPanel.style.display = "none";
     });
 
-    // 5. My Shifts Quick Toggle
-    const btnToggleMyShifts = document.getElementById("btn-toggle-my-shifts");
-    btnToggleMyShifts?.addEventListener("click", () => {
-      playPop();
-      if (!hasCompleteProfile() && !state.filterMineOnly) {
-        showToast("Complete your profile to see your posted shifts!", "default");
-      }
-      state.filterMineOnly = !state.filterMineOnly;
-      btnToggleMyShifts.classList.toggle("active", state.filterMineOnly);
-      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
-    });
-
-    // 6. Level Dropdown Filter with Checkboxes
+    // 5. Level Dropdown Filter with Checkboxes
     function updateLevelDropdownLabel() {
       const labelEl = document.getElementById("level-dropdown-label");
       if (!labelEl) return;

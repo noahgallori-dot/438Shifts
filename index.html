@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=438.25">
+  <link rel="stylesheet" href="styles.css?v=438.28">
   <!-- EmailJS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <!-- Supabase JS SDK (Cross-Device Cloud Sync) -->
@@ -43,13 +43,6 @@
         <div class="brand-text">
           <div class="brand-title-wrap">
             <h1 class="brand-title">438 <span>SHIFTS</span></h1>
-            <span id="header-admin-badge" class="admin-status-badge" style="display: none;"
-              title="Manager Mode Active (Tap to open Manager Hub)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="#F59E0B" stroke="#B45309" stroke-width="1.8">
-                <polygon points="2 19 22 19 20 7 15 12 12 4 9 12 4 7 2 19"></polygon>
-              </svg>
-              <span>Manager Hub</span>
-            </span>
           </div>
           <p class="brand-subtitle">Associate Dashboard</p>
         </div>
@@ -101,7 +94,7 @@
   <section class="controls-bar">
     <div class="controls-container">
 
-      <!-- Date Navigation Row -->
+      <!-- Left: Date Stepper & Period Title -->
       <div class="date-navigation-row">
         <div class="date-stepper">
           <button id="btn-nav-prev" class="nav-arrow-btn" aria-label="Previous Period">
@@ -119,38 +112,27 @@
         <h2 id="current-period-title" class="current-period-label">November 2026</h2>
       </div>
 
-      <!-- Streamlined Controls Row: Views, My Shifts & Level Dropdown -->
-      <div class="filter-bar-row">
-        <div class="view-and-filter-left">
-          <!-- View Switcher (Month / Week) with animated sliding pill -->
-          <div class="view-switcher" data-active-view="month" role="tablist" aria-label="Schedule Views">
-            <div class="view-pill-glider" aria-hidden="true"></div>
-            <button id="btn-view-month" class="view-btn active" role="tab" aria-selected="true" data-view="month">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-                <rect x="3" y="4" width="18" height="18" rx="3"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-              </svg>
-              <span>Month</span>
-            </button>
-            <button id="btn-view-week" class="view-btn" role="tab" aria-selected="false" data-view="week">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-                <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-                <line x1="9" y1="4" x2="9" y2="20"></line>
-                <line x1="15" y1="4" x2="15" y2="20"></line>
-              </svg>
-              <span>Week</span>
-            </button>
-          </div>
-
-          <!-- Compact My Shifts Quick Filter -->
-          <button id="btn-toggle-my-shifts" class="filter-pill-toggle" title="Filter to only your shifts or all shifts">
+      <!-- Right: View Switcher (Desktop) & Level Dropdown Filter -->
+      <div class="controls-right-group">
+        <!-- View Switcher (Month / Week) with animated sliding pill -->
+        <div class="view-switcher" data-active-view="month" role="tablist" aria-label="Schedule Views">
+          <div class="view-pill-glider" aria-hidden="true"></div>
+          <button id="btn-view-month" class="view-btn active" role="tab" aria-selected="true" data-view="month">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
+              <rect x="3" y="4" width="18" height="18" rx="3"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
-            <span class="pill-text">My Shifts</span>
+            <span>Month</span>
+          </button>
+          <button id="btn-view-week" class="view-btn" role="tab" aria-selected="false" data-view="week">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <line x1="9" y1="4" x2="9" y2="20"></line>
+              <line x1="15" y1="4" x2="15" y2="20"></line>
+            </svg>
+            <span>Week</span>
           </button>
         </div>
 
@@ -431,7 +413,8 @@
       <div class="modal-header">
         <div id="post-shift-modal-badge" class="modal-badge-tag">STORE #438</div>
         <h2 id="post-shift-modal-title" class="modal-title">Post a Shift to Cover or Trade</h2>
-        <p id="post-shift-modal-sub" class="modal-sub">Drop your shift so your coworkers can see it and text/call you.</p>
+        <p id="post-shift-modal-sub" class="modal-sub">Drop your shift so your coworkers can see it and text/call you.
+        </p>
       </div>
 
       <form id="form-post-shift" class="modal-form">
@@ -519,18 +502,18 @@
 
         <div class="form-row-2">
           <div class="form-group">
-            <label for="profile-first-name">First Name *</label>
+            <label for="profile-first-name">First Name</label>
             <input type="text" id="profile-first-name" placeholder="First" required autocomplete="given-name">
           </div>
           <div class="form-group">
-            <label for="profile-last-name">Last Name *</label>
+            <label for="profile-last-name">Last Name</label>
             <input type="text" id="profile-last-name" placeholder="Last" required autocomplete="family-name">
           </div>
         </div>
 
         <!-- Email & Verification (EmailJS) -->
         <div class="form-group">
-          <label for="profile-email">Email Address (For Verification) *</label>
+          <label for="profile-email">Email Address (For Verification)</label>
           <div class="email-input-wrap">
             <input type="email" id="profile-email" placeholder="e.g. coworker@gmail.com" required autocomplete="email">
             <button type="button" id="btn-send-code" class="btn-send-code">
@@ -575,12 +558,12 @@
         </div>
 
         <div class="form-group">
-          <label for="profile-phone">Phone Number (Required for text/call) *</label>
+          <label for="profile-phone">Phone Number (Required for text/call)</label>
           <input type="tel" id="profile-phone" placeholder="(949) 555-0199" maxlength="14" required autocomplete="tel">
         </div>
 
         <div class="form-group">
-          <label for="profile-level">Your In-N-Out Associate Level (1–6) *</label>
+          <label for="profile-level">Your In-N-Out Associate Level (1–6)</label>
           <select id="profile-level" required>
             <option value="1" selected>Level 1</option>
             <option value="2">Level 2</option>
@@ -766,7 +749,8 @@
           </div>
           <div class="config-footer">
             <span class="config-note">Synced across all devices via Supabase.</span>
-            <button type="button" id="btn-save-manager-password" class="btn-sheet-toolbar primary">Save Password</button>
+            <button type="button" id="btn-save-manager-password" class="btn-sheet-toolbar primary">Save
+              Password</button>
           </div>
         </div>
 
@@ -891,15 +875,18 @@
   <div id="modal-request-submitted" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" style="text-align: center; max-width: 420px;">
       <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
-      <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--palm-green-light); color: var(--palm-green); border: 2px solid #BBF7D0; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+      <div
+        style="width: 60px; height: 60px; border-radius: 50%; background: var(--palm-green-light); color: var(--palm-green); border: 2px solid #BBF7D0; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"
+          stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
       </div>
       <div class="modal-badge-tag">REQUEST SENT</div>
       <h2 class="modal-title" style="margin-bottom: 0.5rem;">You Have Requested to Join!</h2>
       <p class="modal-sub" style="margin-bottom: 1.35rem; font-size: 0.92rem; line-height: 1.45;">
-        Your request to join the Store #438 shift board has been sent to the site operator. Once approved, you'll be able to view coworker phone numbers and post shifts.
+        Your request to join the Store #438 shift board has been sent to the site operator. Once approved, you'll be
+        able to view coworker phone numbers and post shifts.
       </p>
       <button type="button" id="btn-close-request-popup" class="btn-submit-primary" data-close-modal>
         <span>Got It</span>

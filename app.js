@@ -125,7 +125,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   const STORAGE_KEY_ADMIN_HUB_OPEN = "crew_admin_hub_open_438";
   const STORAGE_KEY_ROSTER = "crew_associates_roster_438";
   const STORAGE_KEY_EMAILJS = "crew_emailjs_config_438";
+  const STORAGE_KEY_MANAGER_PASS = "crew_manager_password_438";
   const SUPABASE_EMAILJS_CONFIG_ID = "__store_438_emailjs_config__";
+  const MANAGER_APPROVAL_TEMPLATE_ID = "template_7l9j34s";
+  const MANAGER_APPROVAL_PUBLIC_KEY = "LyzjvTE6-eDxTMS7e";
+  const MANAGER_APPROVAL_PRIVATE_KEY = "vkb9abj*zwq@MBD0vbe";
+  const DEFAULT_MANAGER_PASSWORD = "Richeson456";
 
   // EmailJS Defaults (Configured with Store #438 keys & Synced via Supabase)
   const DEFAULT_EMAILJS = {
@@ -134,11 +139,23 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     publicKey: "ZRmiY1jbzERyD6utf"
   };
 
+  function getManagerPassword() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_MANAGER_PASS);
+      if (saved && saved.trim()) return saved.trim();
+    } catch (e) {}
+    return DEFAULT_MANAGER_PASSWORD;
+  }
+
+  function saveManagerPasswordLocalOnly(pwd) {
+    if (!pwd || !pwd.trim()) return;
+    try {
+      localStorage.setItem(STORAGE_KEY_MANAGER_PASS, pwd.trim());
+    } catch (e) {}
+  }
+
   const LEGACY_EMAILJS_VALUES = new Set([
-    "service_z9v1wnm",
-    "vkb9abj*zwq@MBD0vbe",
-    "template_7775lqt",
-    "LyzjvTE6-eDxTMS7e"
+    "template_7775lqt"
   ]);
 
   function normalizeEmailJSConfig(cfg) {
@@ -186,6 +203,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
   async function upsertEmailJSConfigToSupabase(cfg) {
     const cleanCfg = normalizeEmailJSConfig(cfg);
+    const managerPassword = getManagerPassword();
     const shiftConfigRow = {
       id: SUPABASE_EMAILJS_CONFIG_ID,
       date: "1970-01-01",
@@ -196,6 +214,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         serviceId: cleanCfg.serviceId,
         templateId: cleanCfg.templateId,
         publicKey: cleanCfg.publicKey,
+        managerPassword: managerPassword,
         updatedAt: new Date().toISOString()
       }),
       status: "config",
@@ -224,6 +243,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         serviceId: cleanCfg.serviceId,
         templateId: cleanCfg.templateId,
         publicKey: cleanCfg.publicKey,
+        managerPassword: managerPassword,
         updatedAt: new Date().toISOString()
       }
     };
@@ -316,94 +336,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     };
   }
 
-  // Initial Seed Associates Roster
+  // Retired Fake / Seed Associate IDs (automatically purged if cached locally or in cloud)
+  const FAKE_SEED_ASSOCIATE_IDS = new Set([
+    "u-101", "u-102", "u-103", "u-104", "u-105", "u-106", "u-107"
+  ]);
+
+  function isFakeSeedAssociate(assoc) {
+    if (!assoc) return false;
+    if (assoc.id && FAKE_SEED_ASSOCIATE_IDS.has(String(assoc.id))) return true;
+    return false;
+  }
+
+  // Initial Seed Associates Roster (Empty — no fake associates)
   function generateSeedRoster() {
-    return [
-      {
-        id: "u-101",
-        name: "Marcus Vance",
-        email: "marcus.vance438@gmail.com",
-        phone: "(949) 555-0142",
-        level: 5,
-        avatar: "👨‍🍳",
-        avatarBg: "#FFE8E6",
-        emailVerified: true,
-        joinedAt: "2026-10-14T15:20:00.000Z",
-        device: { os: "iOS (iPhone)", browser: "Safari", screen: "393 × 852", isMobile: true, summary: "iOS (iPhone) • Safari", type: "Mobile" }
-      },
-      {
-        id: "u-102",
-        name: "Elena Rodriguez",
-        email: "elena.rodriguez438@yahoo.com",
-        phone: "(949) 555-0188",
-        level: 4,
-        avatar: "🍟",
-        avatarBg: "#FFF8E1",
-        emailVerified: true,
-        joinedAt: "2026-10-16T11:45:00.000Z",
-        device: { os: "Android", browser: "Google Chrome", screen: "412 × 915", isMobile: true, summary: "Android • Chrome", type: "Mobile" }
-      },
-      {
-        id: "u-103",
-        name: "Devon Miller",
-        email: "devon.miller438@gmail.com",
-        phone: "(714) 555-0199",
-        level: 6,
-        avatar: "🧢",
-        avatarBg: "#FFF4D2",
-        emailVerified: true,
-        joinedAt: "2026-10-18T18:10:00.000Z",
-        device: { os: "Windows 11/10", browser: "Google Chrome", screen: "1920 × 1080", isMobile: false, summary: "Windows • Chrome", type: "Desktop" }
-      },
-      {
-        id: "u-104",
-        name: "Sarah Chen",
-        email: "sarah.chen438@icloud.com",
-        phone: "(949) 555-0114",
-        level: 3,
-        avatar: "🥤",
-        avatarBg: "#E0F2F1",
-        emailVerified: true,
-        joinedAt: "2026-10-20T09:30:00.000Z",
-        device: { os: "iOS (iPhone)", browser: "Safari", screen: "390 × 844", isMobile: true, summary: "iOS (iPhone) • Safari", type: "Mobile" }
-      },
-      {
-        id: "u-105",
-        name: "Jordan Taylor",
-        email: "jordan.taylor438@gmail.com",
-        phone: "(949) 555-0173",
-        level: 2,
-        avatar: "👩‍🍳",
-        avatarBg: "#E3F2FD",
-        emailVerified: true,
-        joinedAt: "2026-10-22T14:15:00.000Z",
-        device: { os: "iOS (iPhone)", browser: "Safari", screen: "428 × 926", isMobile: true, summary: "iOS (iPhone) • Safari", type: "Mobile" }
-      },
-      {
-        id: "u-106",
-        name: "Austin Blake",
-        email: "austin.blake438@gmail.com",
-        phone: "(714) 555-0131",
-        level: 4,
-        avatar: "🌟",
-        avatarBg: "#E8F5E9",
-        emailVerified: true,
-        joinedAt: "2026-10-24T16:40:00.000Z",
-        device: { os: "Android", browser: "Google Chrome", screen: "360 × 800", isMobile: true, summary: "Android • Chrome", type: "Mobile" }
-      },
-      {
-        id: "u-107",
-        name: "Brianna Diaz",
-        email: "brianna.diaz438@gmail.com",
-        phone: "(949) 555-0165",
-        level: 5,
-        avatar: "🍔",
-        avatarBg: "#FFF3E0",
-        emailVerified: true,
-        joinedAt: "2026-10-26T20:05:00.000Z",
-        device: { os: "macOS", browser: "Safari", screen: "1512 × 982", isMobile: false, summary: "macOS • Safari", type: "Desktop" }
-      }
-    ];
+    return [];
   }
 
   function formatDateKey(date) {
@@ -413,55 +359,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     return `${y}-${m}-${d}`;
   }
 
-  // Deterministic IDs for seed shifts so all devices share the same seed IDs
-  function generateSeedShifts(baseDate = new Date()) {
-    const shifts = [];
-    const deletedSet = getDeletedShiftIds();
-    const mockCrew = [
-      { id: "u-101", name: "Marcus Vance", email: "marcus.vance438@gmail.com", phone: "(949) 555-0142", level: 5, avatar: "👨‍🍳", avatarBg: "#FFE8E6" },
-      { id: "u-102", name: "Elena Rodriguez", email: "elena.rodriguez438@yahoo.com", phone: "(949) 555-0188", level: 4, avatar: "🍟", avatarBg: "#FFF8E1" },
-      { id: "u-103", name: "Devon Miller", email: "devon.miller438@gmail.com", phone: "(714) 555-0199", level: 6, avatar: "🧢", avatarBg: "#FFF4D2" },
-      { id: "u-104", name: "Sarah Chen", email: "sarah.chen438@icloud.com", phone: "(949) 555-0114", level: 3, avatar: "🥤", avatarBg: "#E0F2F1" },
-      { id: "u-105", name: "Jordan Taylor", email: "jordan.taylor438@gmail.com", phone: "(949) 555-0173", level: 2, avatar: "👩‍🍳", avatarBg: "#E3F2FD" },
-      { id: "u-106", name: "Austin Blake", email: "austin.blake438@gmail.com", phone: "(714) 555-0131", level: 4, avatar: "🌟", avatarBg: "#E8F5E9" },
-      { id: "u-107", name: "Brianna Diaz", email: "brianna.diaz438@gmail.com", phone: "(949) 555-0165", level: 5, avatar: "🍔", avatarBg: "#FFF3E0" }
-    ];
-
-    const templates = [
-      { seedKey: "seed-438-1", dayOffset: 0, startTime: "16:00", endTime: "22:30", notes: "Got an exam review. Can trade for Friday or someone please take it!", crewIdx: 0 },
-      { seedKey: "seed-438-2", dayOffset: 1, startTime: "11:00", endTime: "16:30", notes: "Lunch rush. Need coverage for dentist appointment.", crewIdx: 1 },
-      { seedKey: "seed-438-3", dayOffset: 2, startTime: "17:00", endTime: "01:00", notes: "Level 6 grill closer! Big hours. Anyone want to take or trade?", crewIdx: 2 },
-      { seedKey: "seed-438-4", dayOffset: 2, startTime: "12:00", endTime: "17:00", notes: "Afternoon shift. Family graduation ceremony.", crewIdx: 3 },
-      { seedKey: "seed-438-5", dayOffset: 3, startTime: "10:30", endTime: "15:30", notes: "Morning shift.", crewIdx: 4 },
-      { seedKey: "seed-438-6", dayOffset: 4, startTime: "15:30", endTime: "21:30", notes: "Dinner rush. Down to trade for Sunday morning!", crewIdx: 5 },
-      { seedKey: "seed-438-7", dayOffset: 5, startTime: "18:00", endTime: "23:30", notes: "Weekend dinner shift. Need off for birthday.", crewIdx: 6 }
-    ];
-
-    templates.forEach((t, idx) => {
-      if (deletedSet.has(t.seedKey)) return;
-      const shiftDate = new Date(baseDate);
-      shiftDate.setDate(shiftDate.getDate() + t.dayOffset);
-      const crew = mockCrew[t.crewIdx];
-
-      shifts.push({
-        id: t.seedKey,
-        date: formatDateKey(shiftDate),
-        startTime: t.startTime,
-        endTime: t.endTime,
-        notes: t.notes,
-        status: "open",
-        authorId: crew.id,
-        authorName: crew.name,
-        authorEmail: crew.email,
-        authorPhone: crew.phone,
-        authorLevel: crew.level,
-        authorAvatar: crew.avatar,
-        authorAvatarBg: crew.avatarBg,
-        createdAt: new Date(Date.now() - idx * 3600000 * 4).toISOString()
-      });
-    });
-
-    return shifts;
+  // Initial Seed Shifts (Empty — no fake shifts)
+  function generateSeedShifts() {
+    return [];
   }
 
   // ==========================================================================
@@ -483,7 +383,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     pendingVerification: null,
     isEmailVerified: false,
     verifiedEmail: "",
-    supabaseConnected: false
+    supabaseConnected: false,
+    hasLoadedCloudAssociates: false
   };
 
   function hasCompleteProfile() {
@@ -496,6 +397,10 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       state.userProfile.email &&
       state.userProfile.level
     );
+  }
+
+  function isApprovedProfile() {
+    return hasCompleteProfile() && state.userProfile.approved !== false;
   }
 
   function cleanPhoneDigits(phone) {
@@ -594,6 +499,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (row.data && typeof row.data === "object") {
       return { ...row.data, id: row.id || row.data.id };
     }
+    const dev = row.device || { summary: "Web Browser", screen: "N/A", isMobile: false, type: "Desktop" };
     return {
       id: row.id,
       name: row.name,
@@ -603,12 +509,17 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       avatar: row.avatar || "👨‍🍳",
       avatarBg: row.avatar_bg || row.avatarBg || "#FFE8E6",
       emailVerified: row.email_verified !== false,
+      approved: dev.approved !== false,
       joinedAt: row.joined_at || row.joinedAt || new Date().toISOString(),
-      device: row.device || { summary: "Web Browser", screen: "N/A", isMobile: false, type: "Desktop" }
+      device: dev
     };
   }
 
   function mapAssociateToDbRow(assoc) {
+    const dev = {
+      ...(assoc.device || detectDeviceDetails()),
+      approved: assoc.approved !== false
+    };
     return {
       id: assoc.id,
       name: assoc.name,
@@ -619,7 +530,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       avatar_bg: assoc.avatarBg || "#FFE8E6",
       email_verified: true,
       joined_at: assoc.joinedAt || new Date().toISOString(),
-      device: assoc.device || detectDeviceDetails()
+      device: dev
     };
   }
 
@@ -774,6 +685,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
                 parsedNotes = JSON.parse(shiftCfgRow.notes);
               }
             } catch (e) {}
+            if (parsedNotes.managerPassword) {
+              saveManagerPasswordLocalOnly(parsedNotes.managerPassword);
+            }
             const cloudCfg = normalizeEmailJSConfig({
               serviceId: parsedNotes.serviceId || shiftCfgRow.author_name || DEFAULT_EMAILJS.serviceId,
               templateId: parsedNotes.templateId || shiftCfgRow.author_email || DEFAULT_EMAILJS.templateId,
@@ -793,7 +707,11 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
             .map(r => {
               try {
                 if (r.notes && r.notes.startsWith("{")) {
-                  return JSON.parse(r.notes);
+                  const parsed = JSON.parse(r.notes);
+                  return {
+                    ...parsed,
+                    approved: parsed.approved !== false && parsed.device?.approved !== false
+                  };
                 }
               } catch (e) {}
               return {
@@ -805,6 +723,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
                 avatar: r.author_avatar || "👨‍🍳",
                 avatarBg: r.author_avatar_bg || "#FFE8E6",
                 emailVerified: true,
+                approved: true,
                 joinedAt: r.created_at || new Date().toISOString(),
                 device: { summary: "Web Browser", screen: "N/A", isMobile: false, type: "Desktop" }
               };
@@ -847,6 +766,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
               r => r && (r.id === SUPABASE_EMAILJS_CONFIG_ID || r.device?.isSystemConfig === true)
             );
             if (configRow) {
+              if (configRow.device?.managerPassword) {
+                saveManagerPasswordLocalOnly(configRow.device.managerPassword);
+              }
               const cloudCfg = normalizeEmailJSConfig({
                 serviceId: configRow.device?.serviceId || configRow.email || DEFAULT_EMAILJS.serviceId,
                 templateId: configRow.device?.templateId || configRow.phone || DEFAULT_EMAILJS.templateId,
@@ -863,44 +785,61 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         }
       } catch (e) {}
 
-      // Merge associates from both sources by ID/email
-      const mergedMap = new Map();
-      for (const a of [...tableAssociates, ...shiftBackedAssociates]) {
-        if (!a || !a.id) continue;
-        if (!mergedMap.has(a.id)) {
-          mergedMap.set(a.id, a);
-        }
-      }
-
-      if (mergedMap.size > 0) {
-        state.associates = Array.from(mergedMap.values());
-        saveAssociatesLocalOnly(state.associates);
-
-        if (state.userProfile && state.userProfile.email) {
-          const match = state.associates.find(
-            a => a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase()
-          );
-          if (match) {
-            state.userProfile = {
-              ...state.userProfile,
-              id: match.id,
-              name: match.name || state.userProfile.name,
-              phone: match.phone || state.userProfile.phone,
-              level: match.level || state.userProfile.level,
-              avatar: match.avatar || state.userProfile.avatar,
-              avatarBg: match.avatarBg || state.userProfile.avatarBg
-            };
-            try {
-              localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
-            } catch (e) {}
-            updateUserHeaderDisplay();
+          // Merge associates from both sources by ID/email & purge any legacy fake seed associates
+          const mergedMap = new Map();
+          // Prefer shiftBackedAssociates first because its JSON notes always preserves full fields including approved status
+          for (const a of [...shiftBackedAssociates, ...tableAssociates]) {
+            if (!a || !a.id) continue;
+            if (isFakeSeedAssociate(a)) {
+              deleteAssociateFromSupabase(a.id);
+              continue;
+            }
+            if (!mergedMap.has(a.id)) {
+              mergedMap.set(a.id, a);
+            }
           }
-        }
-      } else if (state.associates.length > 0) {
-        for (const a of state.associates) {
-          upsertAssociateToSupabase(a);
-        }
-      }
+
+          if (state.supabaseConnected || mergedMap.size > 0 || state.hasLoadedCloudAssociates) {
+            state.hasLoadedCloudAssociates = true;
+            state.associates = Array.from(mergedMap.values());
+            saveAssociatesLocalOnly(state.associates);
+
+            if (state.userProfile && state.userProfile.email) {
+              const match = state.associates.find(
+                a =>
+                  a.id === state.userProfile.id ||
+                  (a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase())
+              );
+              if (match) {
+                state.userProfile = {
+                  ...state.userProfile,
+                  id: match.id,
+                  name: match.name || state.userProfile.name,
+                  email: match.email || state.userProfile.email,
+                  phone: match.phone || state.userProfile.phone,
+                  level: match.level || state.userProfile.level,
+                  avatar: match.avatar || state.userProfile.avatar,
+                  avatarBg: match.avatarBg || state.userProfile.avatarBg,
+                  approved: match.approved !== false
+                };
+                try {
+                  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+                } catch (e) {}
+                updateUserHeaderDisplay();
+                updateProfileWarningBanner();
+              } else {
+                // Associate was removed by manager — log them out and unverify email
+                forceLogoutRemovedUser();
+              }
+            }
+          } else if (state.associates.length > 0) {
+            state.hasLoadedCloudAssociates = true;
+            for (const a of state.associates) {
+              if (!isFakeSeedAssociate(a)) {
+                upsertAssociateToSupabase(a);
+              }
+            }
+          }
 
       updateCountsAndTitle();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
@@ -1057,7 +996,14 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   function loadUserProfile() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_USER);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (isFakeSeedAssociate(parsed)) {
+          localStorage.removeItem(STORAGE_KEY_USER);
+          return null;
+        }
+        return parsed;
+      }
     } catch (e) {}
     return null;
   }
@@ -1116,12 +1062,15 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const raw = localStorage.getItem(STORAGE_KEY_ROSTER);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(a => a && !isFakeSeedAssociate(a));
+          saveAssociatesLocalOnly(cleaned);
+          return cleaned;
+        }
       }
     } catch (e) {}
-    const seeds = generateSeedRoster();
-    saveAssociatesLocalOnly(seeds);
-    return seeds;
+    saveAssociatesLocalOnly([]);
+    return [];
   }
 
   function saveAssociatesLocalOnly(roster) {
@@ -1135,6 +1084,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     saveAssociatesLocalOnly(roster);
   }
 
+  function forceLogoutRemovedUser() {
+    state.userProfile = null;
+    state.isEmailVerified = false;
+    state.verifiedEmail = "";
+    state.pendingVerification = null;
+    try {
+      localStorage.removeItem(STORAGE_KEY_USER);
+    } catch (e) {}
+    updateUserHeaderDisplay();
+    updateProfileWarningBanner();
+    const verifiedChip = document.getElementById("email-verified-chip");
+    if (verifiedChip) verifiedChip.style.display = "none";
+  }
+
   // Sync user profile into roster & Supabase
   function syncUserProfileToRoster(profile) {
     if (!profile || !profile.email) return;
@@ -1142,22 +1105,34 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       a => a.id === profile.id || (a.email && a.email.toLowerCase() === profile.email.toLowerCase())
     );
     const dev = profile.device || detectDeviceDetails();
+    const isApproved = profile.approved !== undefined
+      ? profile.approved
+      : (existingIdx !== -1 ? state.associates[existingIdx].approved !== false : false);
+    const fullParts = (profile.name || "").trim().split(/\s+/);
+    const firstName = profile.firstName !== undefined ? profile.firstName : (fullParts[0] || "");
+    const lastName = profile.lastName !== undefined ? profile.lastName : (fullParts.slice(1).join(" ") || "");
 
     const record = {
       id: existingIdx !== -1 ? state.associates[existingIdx].id : profile.id,
       name: profile.name,
+      firstName,
+      lastName,
       email: profile.email,
       phone: profile.phone,
       level: profile.level,
       avatar: profile.avatar || "👨‍🍳",
       avatarBg: profile.avatarBg || "#FFE8E6",
       emailVerified: true,
+      approved: isApproved,
       joinedAt: profile.joinedAt || new Date().toISOString(),
-      device: dev
+      device: { ...dev, approved: isApproved, firstName, lastName }
     };
 
-    // Ensure profile uses the canonical ID from roster if matched by email across devices
+    // Ensure profile uses the canonical ID and approval status from roster if matched by email across devices
     profile.id = record.id;
+    profile.approved = isApproved;
+    profile.firstName = firstName;
+    profile.lastName = lastName;
     try {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(profile));
     } catch (e) {}
@@ -1212,7 +1187,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     let min1 = h1 * 60 + m1;
     let min2 = h2 * 60 + m2;
     if (min2 < min1) min2 += 24 * 60;
-    return Math.round(((min2 - min1) / 60) * 10) / 10;
+    return Math.round(((min2 - min1) / 60) * 100) / 100;
   }
 
   function formatDateHuman(dateKey) {
@@ -1292,7 +1267,11 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     }
 
     if (nameEl) nameEl.textContent = state.userProfile.name;
-    if (levelEl) levelEl.textContent = `L${state.userProfile.level}`;
+    if (levelEl) {
+      levelEl.textContent = state.userProfile.approved === false
+        ? "Pending Approval"
+        : `L${state.userProfile.level}`;
+    }
     if (avatarEl) {
       avatarEl.innerHTML = renderAvatarMarkup(state.userProfile.avatar, state.userProfile.name);
     }
@@ -1306,14 +1285,36 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (brandBtn) {
       brandBtn.title = state.isAdmin
         ? "👑 Store Manager Mode • Tap Logo for Manager Dashboard"
-        : "Tap for Home • Hold 3s for Manager Login";
+        : "Tap for Home • Hold 1s for Manager Login";
     }
   }
 
   function updateProfileWarningBanner() {
     const banner = document.getElementById("profile-warning-banner");
     if (!banner) return;
-    banner.style.display = hasCompleteProfile() ? "none" : "block";
+    const bannerText = banner.querySelector(".banner-text");
+    const bannerBtn = document.getElementById("btn-banner-setup");
+
+    if (!hasCompleteProfile()) {
+      banner.style.display = "block";
+      if (bannerText) {
+        bannerText.innerHTML = `<strong>Setup Required:</strong> You must set your <strong>Name, Phone & Level (with verified email)</strong> before adding shifts.`;
+      }
+      if (bannerBtn) {
+        bannerBtn.style.display = "inline-block";
+        bannerBtn.textContent = "Complete Profile";
+      }
+    } else if (!isApprovedProfile()) {
+      banner.style.display = "block";
+      if (bannerText) {
+        bannerText.innerHTML = `<strong>Pending Manager Approval:</strong> Your account request has been sent to the manager. Once approved, you'll be able to view coworker numbers and post shifts.`;
+      }
+      if (bannerBtn) {
+        bannerBtn.style.display = "none";
+      }
+    } else {
+      banner.style.display = "none";
+    }
   }
 
   function updateCountsAndTitle() {
@@ -1679,19 +1680,55 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     }
 
     const phoneEl = document.getElementById("detail-associate-phone");
-    if (phoneEl) phoneEl.textContent = shift.authorPhone || "No phone listed";
-
-    const rawDigits = cleanPhoneDigits(shift.authorPhone || "");
+    const copyPhoneBtn = document.getElementById("btn-copy-phone");
     const callBtn = document.getElementById("btn-direct-call");
     const smsBtn = document.getElementById("btn-direct-sms");
+    const loginPromptBtn = document.getElementById("btn-login-to-contact");
+    const loginPromptText = document.getElementById("login-to-contact-text");
 
-    if (callBtn) callBtn.href = rawDigits ? `tel:${rawDigits}` : "#";
+    const canViewContact = state.isAdmin || isApprovedProfile();
 
-    if (smsBtn) {
-      const shiftTimeOnlyMsg = encodeURIComponent(
-        `Hey ${shift.authorName}, about your ${formatDateHuman(shift.date)} shift (${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}): `
-      );
-      smsBtn.href = rawDigits ? `sms:${rawDigits}?&body=${shiftTimeOnlyMsg}` : "#";
+    if (canViewContact) {
+      if (phoneEl) phoneEl.textContent = shift.authorPhone || "No phone listed";
+      if (copyPhoneBtn) copyPhoneBtn.style.display = "inline-flex";
+
+      const rawDigits = cleanPhoneDigits(shift.authorPhone || "");
+      if (callBtn) {
+        callBtn.style.display = "inline-flex";
+        callBtn.href = rawDigits ? `tel:${rawDigits}` : "#";
+      }
+      if (smsBtn) {
+        smsBtn.style.display = "inline-flex";
+        const shiftTimeOnlyMsg = encodeURIComponent(
+          `Hey ${shift.authorName}, about your ${formatDateHuman(shift.date)} shift (${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}): `
+        );
+        smsBtn.href = rawDigits ? `sms:${rawDigits}?&body=${shiftTimeOnlyMsg}` : "#";
+      }
+      if (loginPromptBtn) loginPromptBtn.style.display = "none";
+    } else {
+      const isPending = hasCompleteProfile() && !isApprovedProfile();
+      if (phoneEl) {
+        phoneEl.textContent = isPending
+          ? "Pending manager approval to view number"
+          : "Log in to view phone number";
+      }
+      if (copyPhoneBtn) copyPhoneBtn.style.display = "none";
+      if (callBtn) {
+        callBtn.style.display = "none";
+        callBtn.href = "#";
+      }
+      if (smsBtn) {
+        smsBtn.style.display = "none";
+        smsBtn.href = "#";
+      }
+      if (loginPromptBtn) {
+        loginPromptBtn.style.display = "inline-flex";
+        if (loginPromptText) {
+          loginPromptText.textContent = isPending
+            ? "Account Pending Manager Approval"
+            : "Log in to message or claim";
+        }
+      }
     }
 
     // ONLY the person who posted the shift can see and click "Cover Shift"
@@ -1725,6 +1762,10 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       openProfileModal(true);
       return;
     }
+    if (!state.isAdmin && !isApprovedProfile()) {
+      showToast("Your account request is pending manager approval before you can post shifts.", "default");
+      return;
+    }
 
     const modal = document.getElementById("modal-post-shift");
     const dateInput = document.getElementById("post-date");
@@ -1752,11 +1793,130 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   // ==========================================================================
   // Modal: Profile Setup & EmailJS Verification
   // ==========================================================================
+  function splitFullName(fullName = "") {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: parts[0] || "",
+      lastName: parts.slice(1).join(" ") || ""
+    };
+  }
+
+  function updateSaveProfileButtonState() {
+    const btnSave = document.getElementById("btn-save-profile");
+    const btnText = document.getElementById("btn-save-profile-text");
+    const emailInput = document.getElementById("profile-email");
+    const curEmail = (emailInput?.value || "").trim().toLowerCase();
+
+    const isVerified = !!(
+      state.isEmailVerified &&
+      state.verifiedEmail &&
+      curEmail &&
+      state.verifiedEmail.toLowerCase() === curEmail
+    );
+
+    if (btnSave) {
+      btnSave.disabled = !isVerified;
+      btnSave.classList.toggle("is-disabled", !isVerified);
+    }
+
+    if (btnText) {
+      const existingAssoc = curEmail
+        ? state.associates.find(a => a.email && a.email.trim().toLowerCase() === curEmail)
+        : null;
+      const isAlreadyApproved = existingAssoc
+        ? existingAssoc.approved !== false
+        : (state.userProfile?.approved === true);
+
+      btnText.textContent = isAlreadyApproved ? "Save Profile" : "Request to Join";
+    }
+  }
+
+  function autoSaveProfileIfVerified(triggerEmailNotificationIfNew = false) {
+    const emailInput = document.getElementById("profile-email");
+    const curEmail = (emailInput?.value || "").trim();
+    if (
+      !state.isEmailVerified ||
+      !state.verifiedEmail ||
+      !curEmail ||
+      state.verifiedEmail.toLowerCase() !== curEmail.toLowerCase()
+    ) {
+      return null;
+    }
+
+    const firstInput = document.getElementById("profile-first-name");
+    const lastInput = document.getElementById("profile-last-name");
+    const phoneInput = document.getElementById("profile-phone");
+    const levelSelect = document.getElementById("profile-level");
+
+    const existingAssoc = state.associates.find(
+      a => a.email && a.email.trim().toLowerCase() === curEmail.toLowerCase()
+    );
+
+    const existingNames = splitFullName(existingAssoc?.name || state.userProfile?.name || "");
+    const firstName = (firstInput?.value || "").trim() || existingAssoc?.firstName || state.userProfile?.firstName || existingNames.firstName;
+    const lastName = (lastInput?.value || "").trim() || existingAssoc?.lastName || state.userProfile?.lastName || existingNames.lastName;
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || existingAssoc?.name || state.userProfile?.name || "";
+    const rawPhone = (phoneInput?.value || "").trim();
+    const phone = formatPhoneNumberLive(rawPhone) || rawPhone || existingAssoc?.phone || state.userProfile?.phone || "";
+    const level = parseInt(levelSelect?.value, 10) || existingAssoc?.level || state.userProfile?.level || 1;
+
+    let finalAvatar = "👨‍🍳";
+    let finalAvatarBg = "#FFE8E6";
+
+    if (state.uploadedAvatarDataUrl) {
+      finalAvatar = state.uploadedAvatarDataUrl;
+    } else if (!state.selectedAvatarPreset && state.userProfile?.avatar?.startsWith("data:image")) {
+      finalAvatar = state.userProfile.avatar;
+    } else {
+      const preset = PRESET_AVATARS.find(p => p.id === state.selectedAvatarPreset) || PRESET_AVATARS[0];
+      finalAvatar = preset.emoji;
+      finalAvatarBg = preset.bg;
+    }
+
+    const isAlreadyApproved = existingAssoc
+      ? existingAssoc.approved !== false
+      : (state.userProfile?.approved === true);
+
+    const dev = detectDeviceDetails();
+    const updatedProfile = {
+      id: existingAssoc?.id || state.userProfile?.id || `user-438-${Date.now()}`,
+      name: fullName,
+      firstName,
+      lastName,
+      email: curEmail,
+      phone,
+      level,
+      avatar: finalAvatar,
+      avatarBg: finalAvatarBg,
+      approved: isAlreadyApproved,
+      joinedAt: existingAssoc?.joinedAt || state.userProfile?.joinedAt || new Date().toISOString(),
+      device: { ...dev, approved: isAlreadyApproved, firstName, lastName }
+    };
+
+    saveUserProfile(updatedProfile);
+
+    const phoneDigits = String(phone || "").replace(/\D/g, "");
+    if (
+      triggerEmailNotificationIfNew &&
+      !isAlreadyApproved &&
+      firstName &&
+      lastName &&
+      phoneDigits.length >= 10 &&
+      state.lastNotifiedRequestEmail !== curEmail.toLowerCase()
+    ) {
+      state.lastNotifiedRequestEmail = curEmail.toLowerCase();
+      sendManagerAccountRequestEmail(updatedProfile);
+    }
+
+    return updatedProfile;
+  }
+
   function openProfileModal(isPromptForPost = false) {
     const modal = document.getElementById("modal-profile");
     const title = document.getElementById("profile-modal-title");
     const badge = document.getElementById("profile-modal-badge");
-    const nameInput = document.getElementById("profile-name");
+    const firstNameInput = document.getElementById("profile-first-name");
+    const lastNameInput = document.getElementById("profile-last-name");
     const emailInput = document.getElementById("profile-email");
     const phoneInput = document.getElementById("profile-phone");
     const levelSelect = document.getElementById("profile-level");
@@ -1776,10 +1936,23 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     }
 
     if (state.userProfile) {
-      if (nameInput) nameInput.value = state.userProfile.name || "";
+      const split = splitFullName(state.userProfile.name || "");
+      const fName = state.userProfile.firstName !== undefined ? state.userProfile.firstName : split.firstName;
+      const lName = state.userProfile.lastName !== undefined ? state.userProfile.lastName : split.lastName;
+      if (firstNameInput) firstNameInput.value = fName;
+      if (lastNameInput) lastNameInput.value = lName;
       if (emailInput) emailInput.value = state.userProfile.email || "";
       if (phoneInput) phoneInput.value = formatPhoneNumberLive(state.userProfile.phone || "");
       if (levelSelect) levelSelect.value = state.userProfile.level || 1;
+
+      if (state.userProfile.avatar && state.userProfile.avatar.startsWith("data:image")) {
+        state.uploadedAvatarDataUrl = state.userProfile.avatar;
+        state.selectedAvatarPreset = null;
+      } else {
+        state.uploadedAvatarDataUrl = null;
+        const matchedPreset = PRESET_AVATARS.find(p => p.emoji === state.userProfile.avatar);
+        state.selectedAvatarPreset = matchedPreset ? matchedPreset.id : "avatar-1";
+      }
       updateProfileAvatarPreview(state.userProfile.avatar);
 
       if (state.userProfile.email) {
@@ -1794,16 +1967,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         if (verifiedChip) verifiedChip.style.display = "none";
       }
     } else {
-      if (nameInput) nameInput.value = "";
+      if (firstNameInput) firstNameInput.value = "";
+      if (lastNameInput) lastNameInput.value = "";
       if (emailInput) emailInput.value = "";
       if (phoneInput) phoneInput.value = "";
       if (levelSelect) levelSelect.value = 1;
       state.isEmailVerified = false;
       state.verifiedEmail = "";
+      state.uploadedAvatarDataUrl = null;
+      state.selectedAvatarPreset = "avatar-1";
       if (verifiedChip) verifiedChip.style.display = "none";
       updateProfileAvatarPreview("👨‍🍳");
     }
 
+    updateSaveProfileButtonState();
     renderAvatarPresets();
     openModal(modal);
   }
@@ -1813,10 +1990,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (!container) return;
     container.innerHTML = "";
 
+    const hasCustomPhoto = !!(
+      state.uploadedAvatarDataUrl ||
+      (!state.selectedAvatarPreset && state.userProfile?.avatar?.startsWith("data:image"))
+    );
+
     PRESET_AVATARS.forEach(preset => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `avatar-preset-btn ${state.selectedAvatarPreset === preset.id ? "selected" : ""}`;
+      const isSelected = !hasCustomPhoto && state.selectedAvatarPreset === preset.id;
+      btn.className = `avatar-preset-btn ${isSelected ? "selected" : ""}`;
       btn.style.background = preset.bg;
       btn.innerHTML = renderAvatarMarkup(preset.emoji, preset.name);
       btn.title = preset.name;
@@ -1825,9 +2008,14 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         playPop();
         state.selectedAvatarPreset = preset.id;
         state.uploadedAvatarDataUrl = null;
+        if (state.userProfile && state.userProfile.avatar && state.userProfile.avatar.startsWith("data:image")) {
+          state.userProfile.avatar = preset.emoji;
+          state.userProfile.avatarBg = preset.bg;
+        }
         document.querySelectorAll(".avatar-preset-btn").forEach(b => b.classList.remove("selected"));
         btn.classList.add("selected");
         updateProfileAvatarPreview(preset.emoji);
+        autoSaveProfileIfVerified(false);
       });
 
       container.appendChild(btn);
@@ -1921,9 +2109,143 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     return { sent, code, errorMessage, config };
   }
 
+  // Send Account Request Email to Manager via EmailJS (Template: template_7l9j34s)
+  async function sendManagerAccountRequestEmail(profile) {
+    if (!profile) return false;
+    const config = getEmailJSConfig();
+    const split = splitFullName(profile.name || "");
+    const firstName = profile.firstName !== undefined ? profile.firstName : split.firstName;
+    const lastName = profile.lastName !== undefined ? profile.lastName : split.lastName;
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || profile.name || "";
+
+    const templateParams = {
+      First: firstName,
+      Last: lastName,
+      Email: profile.email || "",
+      Phone: profile.phone || "",
+      Level: String(profile.level || 1),
+      first: firstName,
+      last: lastName,
+      email: profile.email || "",
+      phone: profile.phone || "",
+      level: String(profile.level || 1),
+      name: fullName,
+      to_email: profile.email || "",
+      reply_to: profile.email || ""
+    };
+
+    // Ordered candidate EmailJS credential sets for template_7l9j34s
+    const candidateConfigs = [
+      {
+        serviceId: MANAGER_APPROVAL_PRIVATE_KEY,
+        templateId: MANAGER_APPROVAL_TEMPLATE_ID,
+        publicKey: MANAGER_APPROVAL_PUBLIC_KEY,
+        accessToken: MANAGER_APPROVAL_PRIVATE_KEY
+      },
+      {
+        serviceId: "service_z9v1wnm",
+        templateId: MANAGER_APPROVAL_TEMPLATE_ID,
+        publicKey: MANAGER_APPROVAL_PUBLIC_KEY,
+        accessToken: MANAGER_APPROVAL_PRIVATE_KEY
+      },
+      {
+        serviceId: "service_fc5qlhe",
+        templateId: MANAGER_APPROVAL_TEMPLATE_ID,
+        publicKey: MANAGER_APPROVAL_PUBLIC_KEY,
+        accessToken: MANAGER_APPROVAL_PRIVATE_KEY
+      },
+      {
+        serviceId: "default_service",
+        templateId: MANAGER_APPROVAL_TEMPLATE_ID,
+        publicKey: MANAGER_APPROVAL_PUBLIC_KEY,
+        accessToken: MANAGER_APPROVAL_PRIVATE_KEY
+      },
+      {
+        serviceId: config.serviceId,
+        templateId: MANAGER_APPROVAL_TEMPLATE_ID,
+        publicKey: config.publicKey,
+        accessToken: MANAGER_APPROVAL_PRIVATE_KEY
+      },
+      {
+        serviceId: config.serviceId,
+        templateId: MANAGER_APPROVAL_TEMPLATE_ID,
+        publicKey: config.publicKey
+      }
+    ];
+
+    for (const cand of candidateConfigs) {
+      if (!cand.serviceId || !cand.publicKey) continue;
+
+      // 1. Try direct EmailJS REST API (supports accessToken / private key & avoids SDK init conflicts)
+      try {
+        const payload = {
+          service_id: cand.serviceId,
+          template_id: cand.templateId,
+          user_id: cand.publicKey,
+          template_params: templateParams
+        };
+        if (cand.accessToken) {
+          payload.accessToken = cand.accessToken;
+        }
+        const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          return true;
+        }
+      } catch (e) {}
+
+      // 2. Fallback to window.emailjs.send if available
+      if (window.emailjs && window.emailjs.send) {
+        try {
+          await window.emailjs.send(
+            cand.serviceId,
+            cand.templateId,
+            templateParams,
+            {
+              publicKey: cand.publicKey,
+              ...(cand.accessToken ? { privateKey: cand.accessToken } : {})
+            }
+          );
+          return true;
+        } catch (e) {}
+      }
+    }
+
+    return false;
+  }
+
   // ==========================================================================
   // Store Manager Google Sheet Hub Rendering
   // ==========================================================================
+  function openEditAssociateModal(assoc) {
+    if (!assoc) return;
+    const modal = document.getElementById("modal-edit-associate");
+    const idInput = document.getElementById("edit-assoc-id");
+    const firstNameInput = document.getElementById("edit-assoc-first-name");
+    const lastNameInput = document.getElementById("edit-assoc-last-name");
+    const emailInput = document.getElementById("edit-assoc-email");
+    const phoneInput = document.getElementById("edit-assoc-phone");
+    const levelSelect = document.getElementById("edit-assoc-level");
+    const statusSelect = document.getElementById("edit-assoc-status");
+
+    const split = splitFullName(assoc.name || "");
+    const fName = assoc.firstName !== undefined ? assoc.firstName : split.firstName;
+    const lName = assoc.lastName !== undefined ? assoc.lastName : split.lastName;
+
+    if (idInput) idInput.value = assoc.id || "";
+    if (firstNameInput) firstNameInput.value = fName;
+    if (lastNameInput) lastNameInput.value = lName;
+    if (emailInput) emailInput.value = assoc.email || "";
+    if (phoneInput) phoneInput.value = formatPhoneNumberLive(assoc.phone || "") || assoc.phone || "";
+    if (levelSelect) levelSelect.value = String(assoc.level || 1);
+    if (statusSelect) statusSelect.value = assoc.approved === false ? "pending" : "approved";
+
+    openModal(modal);
+  }
+
   function renderManagerHub(filterText = "") {
     const tbody = document.getElementById("manager-roster-tbody");
     if (!tbody) return;
@@ -1941,27 +2263,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       );
     });
 
-    // Update Stats
+    // Update Stats (Only Total Associates & Active Shifts)
     const totalCount = state.associates.length;
-    const verifiedCount = state.associates.filter(a => a.emailVerified).length;
-    const mobileCount = state.associates.filter(a => a.device?.isMobile).length;
-    const mobilePct = totalCount ? Math.round((mobileCount / totalCount) * 100) : 0;
     const activeShiftsCount = state.shifts.filter(s => s.status !== "claimed").length;
 
     const elTotal = document.getElementById("stat-total-crew");
-    const elVer = document.getElementById("stat-verified-count");
-    const elMob = document.getElementById("stat-mobile-pct");
     const elShifts = document.getElementById("stat-active-shifts");
 
     if (elTotal) elTotal.textContent = totalCount;
-    if (elVer) elVer.textContent = verifiedCount;
-    if (elMob) elMob.textContent = `${mobilePct}%`;
     if (elShifts) elShifts.textContent = activeShiftsCount;
 
     if (associates.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="10" style="text-align:center; padding: 2.5rem; color: var(--text-muted);">
+          <td colspan="11" style="text-align:center; padding: 2.5rem; color: var(--text-muted);">
             No associates found matching "${filterText}".
           </td>
         </tr>
@@ -1975,6 +2290,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
       const dev = assoc.device || { summary: "Desktop Web", screen: "1920 × 1080", isMobile: false, type: "Desktop" };
       const isMobile = dev.isMobile;
+      const isApproved = assoc.approved !== false;
 
       tr.innerHTML = `
         <td class="col-num">${idx + 1}</td>
@@ -1985,6 +2301,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
             </div>
             <span>${assoc.name}</span>
           </div>
+        </td>
+        <td>
+          ${isApproved
+            ? `<span class="sheet-approved-pill">✓ Approved</span>`
+            : `<span class="sheet-pending-pill">⏳ Pending</span>`
+          }
         </td>
         <td>
           <span class="level-badge l${assoc.level}">Level ${assoc.level}</span>
@@ -2004,17 +2326,62 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           <span class="device-badge-pill ${isMobile ? 'mobile' : 'desktop'}">${dev.type || (isMobile ? 'Mobile' : 'Desktop')}</span>
         </td>
         <td>
-          <button class="btn-mini-text btn-table-delete" data-assoc-id="${assoc.id}" style="color:#DC2626;" title="Remove associate">Remove</button>
+          <div class="table-actions-wrap">
+            ${!isApproved ? `<button type="button" class="btn-table-action approve" data-assoc-id="${assoc.id}" title="Approve account request">Approve</button>` : ""}
+            <button type="button" class="btn-table-action edit" data-assoc-id="${assoc.id}" title="Edit associate info">Edit</button>
+            <button type="button" class="btn-table-action remove" data-assoc-id="${assoc.id}" title="Remove associate">Remove</button>
+          </div>
         </td>
       `;
 
-      tr.querySelector(".btn-table-delete")?.addEventListener("click", (e) => {
+      tr.querySelector(".btn-table-action.approve")?.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (confirm(`Remove associate ${assoc.name} from Store #438 directory?`)) {
+        assoc.approved = true;
+        if (assoc.device && typeof assoc.device === "object") {
+          assoc.device.approved = true;
+        }
+        saveAssociatesRoster(state.associates);
+        upsertAssociateToSupabase(assoc);
+        if (
+          state.userProfile &&
+          (state.userProfile.id === assoc.id ||
+            (state.userProfile.email && assoc.email && state.userProfile.email.toLowerCase() === assoc.email.toLowerCase()))
+        ) {
+          state.userProfile.approved = true;
+          try {
+            localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+          } catch (err) {}
+          updateUserHeaderDisplay();
+          updateProfileWarningBanner();
+        }
+        playSuccess();
+        showToast(`Approved ${assoc.name}'s account!`, "success");
+        renderManagerHub(filterText);
+      });
+
+      tr.querySelector(".btn-table-action.edit")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        playPop();
+        openEditAssociateModal(assoc);
+      });
+
+      tr.querySelector(".btn-table-action.remove")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm(`Remove associate ${assoc.name} from Store #438 directory? This will remove their account, log them out, and unverify their email.`)) {
           state.associates = state.associates.filter(a => a.id !== assoc.id);
           saveAssociatesRoster(state.associates);
           deleteAssociateFromSupabase(assoc.id);
-          showToast(`Associate ${assoc.name} removed from roster`, "default");
+
+          // If the removed associate is logged in on this browser, log them out and unverify email immediately
+          if (
+            state.userProfile &&
+            (state.userProfile.id === assoc.id ||
+              (state.userProfile.email && assoc.email && state.userProfile.email.toLowerCase() === assoc.email.toLowerCase()))
+          ) {
+            forceLogoutRemovedUser();
+          }
+
+          showToast(`Associate ${assoc.name} removed & logged out`, "default");
           renderManagerHub(filterText);
         }
       });
@@ -2233,7 +2600,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
     });
 
-    // 3. Brand Logo: Hold 3s to Unlock Manager; Once Logged In, Tap Logo to Open Manager Dashboard
+    // 3. Brand Logo: Hold 1s to Unlock Manager; Once Logged In, Tap Logo to Open Manager Dashboard
     const brandBtn = document.getElementById("btn-brand-home");
     const brandIcon = document.getElementById("brand-icon");
     let holdTimer = null;
@@ -2248,7 +2615,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         brandIcon?.classList.remove("holding");
         playSuccess();
         openModal(document.getElementById("modal-admin-login"));
-      }, 3000);
+      }, 1000);
     }
 
     function cancelHold() {
@@ -2276,6 +2643,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
     }
 
+    brandBtn?.addEventListener("contextmenu", (e) => e.preventDefault());
+    brandBtn?.addEventListener("selectstart", (e) => e.preventDefault());
+
     brandBtn?.addEventListener("mousedown", startHold);
     brandBtn?.addEventListener("mouseup", onBrandTap);
     brandBtn?.addEventListener("mouseleave", cancelHold);
@@ -2299,13 +2669,13 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       openManagerSheet();
     });
 
-    // Admin Unlock Form Submit (Password: Richeson456)
+    // Admin Unlock Form Submit
     document.getElementById("form-admin-login")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const input = document.getElementById("admin-password");
       const val = input ? input.value : "";
 
-      if (val === "Richeson456") {
+      if (val === getManagerPassword()) {
         state.isAdmin = true;
         try { localStorage.setItem(STORAGE_KEY_ADMIN, "true"); } catch (e) {}
         playSuccess();
@@ -2343,13 +2713,135 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     document.getElementById("btn-download-csv")?.addEventListener("click", exportRosterToCSV);
     document.getElementById("btn-copy-sheet")?.addEventListener("click", copyRosterForGoogleSheets);
 
-    document.getElementById("btn-copy-supabase-sql")?.addEventListener("click", () => {
-      navigator.clipboard.writeText(SUPABASE_SQL_SETUP_SCRIPT).then(() => {
-        playSuccess();
-        showToast("🗄️ Copied Supabase SQL setup script to clipboard!", "success");
-      }).catch(() => {
-        showToast("Could not copy SQL script", "error");
+    // Change Manager Password Panel inside Manager Hub
+    const btnChangeManagerPassword = document.getElementById("btn-change-manager-password");
+    const managerPasswordPanel = document.getElementById("manager-password-panel");
+    const inputNewManagerPwd = document.getElementById("config-new-manager-password");
+    const inputConfirmManagerPwd = document.getElementById("config-confirm-manager-password");
+
+    btnChangeManagerPassword?.addEventListener("click", () => {
+      playPop();
+      if (managerPasswordPanel) {
+        const isHidden = managerPasswordPanel.style.display === "none";
+        managerPasswordPanel.style.display = isHidden ? "block" : "none";
+        if (isHidden) {
+          if (inputNewManagerPwd) inputNewManagerPwd.value = "";
+          if (inputConfirmManagerPwd) inputConfirmManagerPwd.value = "";
+          inputNewManagerPwd?.focus();
+        }
+      }
+    });
+
+    document.getElementById("btn-save-manager-password")?.addEventListener("click", () => {
+      const newPwd = inputNewManagerPwd?.value.trim() || "";
+      const confirmPwd = inputConfirmManagerPwd?.value.trim() || "";
+      if (!newPwd) {
+        showToast("Please enter a new password!", "error");
+        return;
+      }
+      if (newPwd !== confirmPwd) {
+        showToast("Passwords do not match!", "error");
+        return;
+      }
+      saveManagerPasswordLocalOnly(newPwd);
+      upsertEmailJSConfigToSupabase(getEmailJSConfig());
+      playSuccess();
+      showToast("Manager password updated & synced across devices!", "success");
+      if (managerPasswordPanel) managerPasswordPanel.style.display = "none";
+    });
+
+    // Edit Associate Form Submit (Manager Hub)
+    const editPhoneInputEl = document.getElementById("edit-assoc-phone");
+    editPhoneInputEl?.addEventListener("input", (e) => {
+      const formatted = formatPhoneNumberLive(e.target.value);
+      if (e.target.value !== formatted) {
+        e.target.value = formatted;
+      }
+    });
+
+    document.getElementById("form-edit-associate")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const assocId = document.getElementById("edit-assoc-id")?.value;
+      const newFirst = document.getElementById("edit-assoc-first-name")?.value.trim() || "";
+      const newLast = document.getElementById("edit-assoc-last-name")?.value.trim() || "";
+      const newName = [newFirst, newLast].filter(Boolean).join(" ").trim();
+      const newEmail = document.getElementById("edit-assoc-email")?.value.trim();
+      const rawPhone = document.getElementById("edit-assoc-phone")?.value.trim();
+      const newPhone = formatPhoneNumberLive(rawPhone) || rawPhone;
+      const newLevel = parseInt(document.getElementById("edit-assoc-level")?.value, 10) || 1;
+      const newStatus = document.getElementById("edit-assoc-status")?.value;
+      const isApproved = newStatus !== "pending";
+
+      if (!assocId || !newFirst || !newLast || !newEmail || !newPhone) {
+        showToast("All associate fields are required!", "error");
+        return;
+      }
+
+      const idx = state.associates.findIndex(a => a.id === assocId);
+      if (idx === -1) return;
+
+      const updatedAssoc = {
+        ...state.associates[idx],
+        name: newName,
+        firstName: newFirst,
+        lastName: newLast,
+        email: newEmail,
+        phone: newPhone,
+        level: newLevel,
+        approved: isApproved,
+        device: {
+          ...(state.associates[idx].device || detectDeviceDetails()),
+          approved: isApproved,
+          firstName: newFirst,
+          lastName: newLast
+        }
+      };
+
+      state.associates[idx] = updatedAssoc;
+      saveAssociatesRoster(state.associates);
+      upsertAssociateToSupabase(updatedAssoc);
+
+      // Also update any active shifts posted by this associate so their edited name/phone/level reflects on the board
+      let shiftsUpdated = false;
+      state.shifts.forEach(s => {
+        if (s.authorId === assocId) {
+          s.authorName = newName;
+          s.authorEmail = newEmail;
+          s.authorPhone = newPhone;
+          s.authorLevel = newLevel;
+          shiftsUpdated = true;
+          upsertShiftToSupabase(s);
+        }
       });
+      if (shiftsUpdated) {
+        saveShifts(state.shifts);
+      }
+
+      // If this associate is the current user on this device, update local userProfile too
+      if (state.userProfile && state.userProfile.id === assocId) {
+        state.userProfile = {
+          ...state.userProfile,
+          name: newName,
+          firstName: newFirst,
+          lastName: newLast,
+          email: newEmail,
+          phone: newPhone,
+          level: newLevel,
+          approved: isApproved
+        };
+        try {
+          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+        } catch (err) {}
+        updateUserHeaderDisplay();
+        updateProfileWarningBanner();
+      }
+
+      closeModal(document.getElementById("modal-edit-associate"));
+      playSuccess();
+      showToast(`Updated ${newName}'s information!`, "success");
+      const searchVal = document.getElementById("sheet-search-input")?.value || "";
+      renderManagerHub(searchVal);
+      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
     });
 
     // EmailJS Settings Panel inside Manager Hub
@@ -2624,8 +3116,10 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const outCtx = outCanvas.getContext("2d");
       outCtx.drawImage(cropCanvas, 15, 15, 270, 270, 0, 0, 240, 240);
       state.uploadedAvatarDataUrl = outCanvas.toDataURL("image/jpeg", 0.88);
+      state.selectedAvatarPreset = null;
       document.querySelectorAll(".avatar-preset-btn").forEach(b => b.classList.remove("selected"));
       updateProfileAvatarPreview(state.uploadedAvatarDataUrl);
+      autoSaveProfileIfVerified(false);
       closeCropModal();
       playSuccess();
       showToast("Photo cropped & ready!", "success");
@@ -2655,7 +3149,6 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
 
       if (errorAlert) errorAlert.style.display = "none";
-      showToast(`Contacting EmailJS for ${email}...`, "default");
 
       try {
         const res = await sendEmailVerificationCode(email);
@@ -2669,18 +3162,18 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
             errorAlert.style.display = "block";
             if (errorMsg) {
               errorMsg.textContent = res.errorMessage
-                ? `EmailJS Response: ${res.errorMessage}`
-                : "Service ID not found or API blocked in EmailJS.";
+                ? `Verification Response: ${res.errorMessage}`
+                : "Could not send verification email.";
             }
           }
           if (quickCodeDisplay) quickCodeDisplay.textContent = res.code;
-          showToast(`EmailJS note: ${res.errorMessage || 'Check dashboard'}. Use test code below.`, "default");
+          showToast("Use the test code shown below to verify.", "default");
         }
       } catch (err) {
         if (codeGroup) codeGroup.style.display = "block";
         if (errorAlert) {
           errorAlert.style.display = "block";
-          if (errorMsg) errorMsg.textContent = "EmailJS network request failed.";
+          if (errorMsg) errorMsg.textContent = "Verification network request failed.";
           if (quickCodeDisplay && state.pendingVerification) quickCodeDisplay.textContent = state.pendingVerification.code;
         }
       } finally {
@@ -2702,7 +3195,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
     });
 
-    // Confirm Code Button (Also auto-restores existing associate details across devices!)
+    // Confirm Code Button (Also auto-restores existing associate details across devices & auto-saves!)
     document.getElementById("btn-verify-code")?.addEventListener("click", () => {
       const entered = document.getElementById("profile-code-input")?.value.trim();
       if (!state.pendingVerification || !entered) {
@@ -2720,18 +3213,32 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           a => a.email && a.email.trim().toLowerCase() === state.verifiedEmail.toLowerCase()
         );
         if (existingAssociate) {
-          const nameInput = document.getElementById("profile-name");
+          const firstInput = document.getElementById("profile-first-name");
+          const lastInput = document.getElementById("profile-last-name");
           const phoneInput = document.getElementById("profile-phone");
           const levelSelect = document.getElementById("profile-level");
-          if (nameInput && !nameInput.value.trim()) nameInput.value = existingAssociate.name || "";
+          const split = splitFullName(existingAssociate.name || "");
+          const fName = existingAssociate.firstName !== undefined ? existingAssociate.firstName : split.firstName;
+          const lName = existingAssociate.lastName !== undefined ? existingAssociate.lastName : split.lastName;
+          if (firstInput && !firstInput.value.trim()) firstInput.value = fName;
+          if (lastInput && !lastInput.value.trim()) lastInput.value = lName;
           if (phoneInput && !phoneInput.value.trim()) phoneInput.value = existingAssociate.phone || "";
           if (levelSelect && existingAssociate.level) levelSelect.value = existingAssociate.level;
           if (existingAssociate.avatar) {
+            if (existingAssociate.avatar.startsWith("data:image")) {
+              state.uploadedAvatarDataUrl = existingAssociate.avatar;
+              state.selectedAvatarPreset = null;
+            } else {
+              state.uploadedAvatarDataUrl = null;
+              const matchedPreset = PRESET_AVATARS.find(p => p.emoji === existingAssociate.avatar);
+              state.selectedAvatarPreset = matchedPreset ? matchedPreset.id : "avatar-1";
+            }
+            renderAvatarPresets();
             updateProfileAvatarPreview(existingAssociate.avatar);
           }
           showToast(`Welcome back, ${existingAssociate.name}! Restored your profile from cloud.`, "success");
         } else {
-          showToast("Email verified successfully! No funny business.", "success");
+          showToast("Email verified! Your profile is automatically saved.", "success");
         }
 
         const verifiedChip = document.getElementById("email-verified-chip");
@@ -2741,6 +3248,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         }
         if (codeGroup) codeGroup.style.display = "none";
         if (errorAlert) errorAlert.style.display = "none";
+
+        updateSaveProfileButtonState();
+        autoSaveProfileIfVerified(false);
       } else {
         showToast("Incorrect code. Please try again.", "error");
       }
@@ -2753,6 +3263,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         const verifiedChip = document.getElementById("email-verified-chip");
         if (verifiedChip) verifiedChip.style.display = "none";
       }
+      updateSaveProfileButtonState();
     });
 
     // Live phone number formatting as user types: (XXX) XXX-XXXX
@@ -2762,19 +3273,43 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (e.target.value !== formatted) {
         e.target.value = formatted;
       }
+      autoSaveProfileIfVerified(false);
     });
 
-    // 11. Profile Form Submit (Stores Device Info & Syncs to Supabase)
+    // Auto-save profile whenever first name, last name, or level changes once email is verified
+    document.getElementById("profile-first-name")?.addEventListener("input", () => {
+      autoSaveProfileIfVerified(false);
+    });
+    document.getElementById("profile-last-name")?.addEventListener("input", () => {
+      autoSaveProfileIfVerified(false);
+    });
+    document.getElementById("profile-level")?.addEventListener("change", () => {
+      autoSaveProfileIfVerified(false);
+    });
+
+    // Also auto-save if user closes the profile modal via X or backdrop after verifying email
+    document.getElementById("btn-close-profile-modal")?.addEventListener("click", () => {
+      autoSaveProfileIfVerified(true);
+    });
+    document.getElementById("modal-profile")?.addEventListener("click", (e) => {
+      if (e.target && e.target.id === "modal-profile") {
+        autoSaveProfileIfVerified(true);
+      }
+    });
+
+    // 11. Profile Form Submit (Stores Device Info, Sends Manager Request Email & Shows Popup)
     document.getElementById("form-profile")?.addEventListener("submit", (e) => {
       e.preventDefault();
-      const name = document.getElementById("profile-name")?.value.trim();
+      const firstName = document.getElementById("profile-first-name")?.value.trim() || "";
+      const lastName = document.getElementById("profile-last-name")?.value.trim() || "";
+      const name = [firstName, lastName].filter(Boolean).join(" ").trim();
       const email = document.getElementById("profile-email")?.value.trim();
       const rawPhone = document.getElementById("profile-phone")?.value.trim();
       const phone = formatPhoneNumberLive(rawPhone) || rawPhone;
       const level = parseInt(document.getElementById("profile-level")?.value, 10) || 1;
 
-      if (!name || !phone || !email || !level) {
-        showToast("All fields are required!", "error");
+      if (!firstName || !lastName || !phone || !email || !level) {
+        showToast("Please fill in your First Name, Last Name, Email, Phone, and Level!", "error");
         return;
       }
 
@@ -2788,7 +3323,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
       if (state.uploadedAvatarDataUrl) {
         finalAvatar = state.uploadedAvatarDataUrl;
-      } else if (state.userProfile?.avatar?.startsWith("data:image")) {
+      } else if (!state.selectedAvatarPreset && state.userProfile?.avatar?.startsWith("data:image")) {
         finalAvatar = state.userProfile.avatar;
       } else {
         const preset = PRESET_AVATARS.find(p => p.id === state.selectedAvatarPreset) || PRESET_AVATARS[0];
@@ -2800,26 +3335,49 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const existingAssoc = state.associates.find(
         a => a.email && a.email.trim().toLowerCase() === email.toLowerCase()
       );
+      const isAlreadyApproved = existingAssoc
+        ? existingAssoc.approved !== false
+        : (state.userProfile?.approved === true);
 
       const dev = detectDeviceDetails();
       const updatedProfile = {
         id: existingAssoc?.id || state.userProfile?.id || `user-438-${Date.now()}`,
         name,
+        firstName,
+        lastName,
         email,
         phone,
         level,
         avatar: finalAvatar,
         avatarBg: finalAvatarBg,
+        approved: isAlreadyApproved,
         joinedAt: existingAssoc?.joinedAt || state.userProfile?.joinedAt || new Date().toISOString(),
-        device: dev
+        device: { ...dev, approved: isAlreadyApproved, firstName, lastName }
       };
 
       saveUserProfile(updatedProfile);
       playSuccess();
-      showToast(`Profile confirmed & synced across devices! Welcome ${name} (L${level})`, "success");
       closeModal(document.getElementById("modal-profile"));
 
+      if (!isAlreadyApproved) {
+        state.lastNotifiedRequestEmail = email.toLowerCase();
+        sendManagerAccountRequestEmail(updatedProfile);
+        openModal(document.getElementById("modal-request-submitted"));
+      } else {
+        showToast(`Profile saved & synced across devices! Welcome ${name} (L${level})`, "success");
+      }
+
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+    });
+
+    document.getElementById("btn-login-to-contact")?.addEventListener("click", () => {
+      playPop();
+      closeModal(document.getElementById("modal-shift-details"));
+      if (hasCompleteProfile() && !isApprovedProfile()) {
+        showToast("Your account is currently awaiting manager approval.", "default");
+      } else {
+        openProfileModal(false);
+      }
     });
 
     // 12. Post Shift Form Submit (Syncs to Supabase)
@@ -2829,6 +3387,10 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (!hasCompleteProfile()) {
         showToast("Setup Required: Please complete your profile before posting a shift!", "error");
         openProfileModal(true);
+        return;
+      }
+      if (!state.isAdmin && !isApprovedProfile()) {
+        showToast("Your account request is pending manager approval before you can post shifts.", "default");
         return;
       }
 

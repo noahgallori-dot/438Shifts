@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=438.20">
+  <link rel="stylesheet" href="styles.css?v=438.23">
   <!-- EmailJS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <!-- Supabase JS SDK (Cross-Device Cloud Sync) -->
@@ -24,8 +24,8 @@
   <!-- Top App Header -->
   <header class="app-header">
     <div class="header-container">
-      <!-- Brand (Hold for 3s to trigger Manager / Admin login) -->
-      <div class="brand-group" id="btn-brand-home" title="Tap for Home • Hold 3s for Manager Login">
+      <!-- Brand (Hold for 1s to trigger Manager / Admin login) -->
+      <div class="brand-group" id="btn-brand-home" title="Tap for Home • Hold 1s for Manager Login">
         <div class="brand-icon" id="brand-icon">
           <span class="icon-palm" aria-hidden="true">
             <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
@@ -320,7 +320,7 @@
         <div class="associate-card-main">
           <div id="detail-associate-avatar" class="associate-avatar-lg">👨‍🍳</div>
           <div class="associate-info">
-            <h3 id="detail-associate-name" class="detail-name">Marcus Vance</h3>
+            <h3 id="detail-associate-name" class="detail-name">Associate</h3>
             <div id="detail-associate-level-badge" class="level-tag-badge">
               <span id="detail-level-pill" class="level-num">Level 5</span>
             </div>
@@ -378,6 +378,13 @@
           </svg>
           <span>Text (SMS)</span>
         </a>
+        <button type="button" id="btn-login-to-contact" class="btn-action-login-prompt" style="display: none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span id="login-to-contact-text">Log in to message or claim</span>
+        </button>
         <!-- Action ONLY for Shift Poster: "Cover Shift" takes it down forever -->
         <button id="btn-shift-covered" class="btn-action-covered" style="display: none;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -479,9 +486,15 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="profile-name">Full Name *</label>
-          <input type="text" id="profile-name" placeholder="e.g. Jordan Taylor" required autocomplete="name">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="profile-first-name">First Name *</label>
+            <input type="text" id="profile-first-name" placeholder="First" required autocomplete="given-name">
+          </div>
+          <div class="form-group">
+            <label for="profile-last-name">Last Name *</label>
+            <input type="text" id="profile-last-name" placeholder="Last" required autocomplete="family-name">
+          </div>
         </div>
 
         <!-- Email & Verification (EmailJS) -->
@@ -502,10 +515,10 @@
         <div id="email-error-alert" class="email-error-alert" style="display: none;">
           <div class="alert-header">
             <span class="err-icon">⚠️</span>
-            <span id="email-error-message">Service ID not found in EmailJS.</span>
+            <span id="email-error-message">Could not send verification email.</span>
           </div>
           <div class="alert-desc">
-            If your EmailJS service is pending, use the generated test code below to verify immediately:
+            If your email verification is delayed, use the generated code below to verify immediately:
           </div>
           <button type="button" id="btn-quick-fill-code" class="btn-quick-code">
             ⚡ Auto-Fill Code (<span id="quick-code-display">123456</span>)
@@ -547,8 +560,8 @@
           </select>
         </div>
 
-        <button type="submit" id="btn-save-profile" class="btn-submit-primary">
-          <span>Save Profile</span>
+        <button type="submit" id="btn-save-profile" class="btn-submit-primary is-disabled" disabled>
+          <span id="btn-save-profile-text">Request to Join</span>
         </button>
       </form>
     </div>
@@ -675,19 +688,11 @@
         <div class="sheet-stats-bar">
           <div class="stat-box">
             <span class="stat-label">TOTAL ASSOCIATES</span>
-            <strong id="stat-total-crew" class="stat-val">7</strong>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">VERIFIED EMAILS</span>
-            <strong id="stat-verified-count" class="stat-val">7</strong>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">MOBILE ACCESS</span>
-            <strong id="stat-mobile-pct" class="stat-val">71%</strong>
+            <strong id="stat-total-crew" class="stat-val">0</strong>
           </div>
           <div class="stat-box">
             <span class="stat-label">ACTIVE SHIFTS</span>
-            <strong id="stat-active-shifts" class="stat-val">7</strong>
+            <strong id="stat-active-shifts" class="stat-val">0</strong>
           </div>
         </div>
 
@@ -702,13 +707,35 @@
               placeholder="Filter by associate name, email, phone, level or device...">
           </div>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <button id="btn-copy-supabase-sql" class="btn-sheet-toolbar"
-              title="Copy SQL script to create tables in Supabase SQL Editor">
-              Copy Supabase SQL
+            <button id="btn-change-manager-password" class="btn-sheet-toolbar"
+              title="Change the password for Manager Login">
+              Change Password
             </button>
             <button id="btn-toggle-email-config" class="btn-sheet-toolbar">
               EmailJS Settings
             </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Manager Password Change Panel -->
+        <div id="manager-password-panel" class="emailjs-config-panel" style="display: none;">
+          <div class="config-panel-header">
+            <h4>🔑 Change Manager Password</h4>
+            <span class="config-help">Update the password required to unlock Store Manager Mode</span>
+          </div>
+          <div class="config-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="config-field">
+              <label>New Password:</label>
+              <input type="password" id="config-new-manager-password" placeholder="Enter new password">
+            </div>
+            <div class="config-field">
+              <label>Confirm New Password:</label>
+              <input type="password" id="config-confirm-manager-password" placeholder="Confirm new password">
+            </div>
+          </div>
+          <div class="config-footer">
+            <span class="config-note">Synced across all devices via Supabase.</span>
+            <button type="button" id="btn-save-manager-password" class="btn-sheet-toolbar primary">Save Password</button>
           </div>
         </div>
 
@@ -747,6 +774,7 @@
             <tr>
               <th class="col-num">#</th>
               <th>Associate Name</th>
+              <th>Status</th>
               <th>Level</th>
               <th>Email Address</th>
               <th>Phone Number</th>
@@ -771,13 +799,90 @@
     </div>
   </div>
 
+  <!-- 6. Edit Associate Modal (Manager Only) -->
+  <div id="modal-edit-associate" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+      <div class="modal-header">
+        <div class="modal-badge-tag">MANAGER EDIT</div>
+        <h2 class="modal-title">Edit Associate Information</h2>
+        <p class="modal-sub">Update associate name, email, phone number, level, or approval status.</p>
+      </div>
+
+      <form id="form-edit-associate" class="modal-form">
+        <input type="hidden" id="edit-assoc-id">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="edit-assoc-first-name">First Name *</label>
+            <input type="text" id="edit-assoc-first-name" placeholder="First" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-assoc-last-name">Last Name *</label>
+            <input type="text" id="edit-assoc-last-name" placeholder="Last" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="edit-assoc-email">Email Address *</label>
+          <input type="email" id="edit-assoc-email" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-assoc-phone">Phone Number *</label>
+          <input type="tel" id="edit-assoc-phone" maxlength="14" required>
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="edit-assoc-level">Level (1–6) *</label>
+            <select id="edit-assoc-level" required>
+              <option value="1">Level 1</option>
+              <option value="2">Level 2</option>
+              <option value="3">Level 3</option>
+              <option value="4">Level 4</option>
+              <option value="5">Level 5</option>
+              <option value="6">Level 6</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-assoc-status">Account Status *</label>
+            <select id="edit-assoc-status" required>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending Approval</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn-submit-primary">
+          <span>Save Associate Changes</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 7. Request to Join Confirmation Popup Modal -->
+  <div id="modal-request-submitted" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card" style="text-align: center; max-width: 420px;">
+      <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
+      <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--palm-green-light); color: var(--palm-green); border: 2px solid #BBF7D0; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="modal-badge-tag">REQUEST SENT</div>
+      <h2 class="modal-title" style="margin-bottom: 0.5rem;">You Have Requested to Join!</h2>
+      <p class="modal-sub" style="margin-bottom: 1.35rem; font-size: 0.92rem; line-height: 1.45;">
+        Your request to join the Store #438 shift board has been sent to the site operator. Once approved, you'll be able to view coworker phone numbers and post shifts.
+      </p>
+      <button type="button" id="btn-close-request-popup" class="btn-submit-primary" data-close-modal>
+        <span>Got It</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- Confetti Canvas -->
   <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
 
-  <script src="app.js?v=438.20"></script>
+  <script src="app.js?v=438.23"></script>
 </body>
 
 </html>

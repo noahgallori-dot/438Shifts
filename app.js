@@ -2709,6 +2709,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     modalEl.classList.add("active");
     modalEl.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+    document.body.classList.add("modal-open");
+    document.documentElement.classList.add("modal-open");
     if (modalEl.id === "modal-manager-hub") {
       try { localStorage.setItem(STORAGE_KEY_ADMIN_HUB_OPEN, "true"); } catch (e) {}
     }
@@ -2718,7 +2720,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (!modalEl) return;
     modalEl.classList.remove("active");
     modalEl.setAttribute("aria-hidden", "true");
-    document.body.style.overflow = "";
+    const anyActive = document.querySelector(".modal-backdrop.active");
+    if (!anyActive) {
+      document.body.style.overflow = "";
+      document.body.classList.remove("modal-open");
+      document.documentElement.classList.remove("modal-open");
+    }
     if (modalEl.id === "modal-manager-hub") {
       try { localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN); } catch (e) {}
     }

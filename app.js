@@ -1618,6 +1618,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     cell.appendChild(shiftsContainer);
 
     cell.addEventListener("click", () => {
+      if (state.didJustSwipe) return;
       playPop();
       state.userSelectedCalendarDay = true;
       state.selectedCalendarDay = dateKey;
@@ -2803,65 +2804,154 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     bottomNavMonth?.addEventListener("click", () => setView("month"));
     bottomNavWeek?.addEventListener("click", () => setView("week"));
 
-    // 2. Date Navigation Controls & Calendar Month Swipe
+    // 2. Date Navigation Controls & Calendar / Week Swipe
+    function triggerSlideAnimation(el, animClass) {
+      if (!el) return;
+      el.classList.remove("swipe-next", "swipe-prev");
+      void el.offsetWidth;
+      el.classList.add(animClass);
+    }
+
     function stepPeriod(direction) {
       playPop();
-      const calGrid = document.getElementById("calendar-days-grid");
+      const animClass = direction > 0 ? "swipe-next" : "swipe-prev";
+
       if (state.currentView === "month") {
         state.userSelectedCalendarDay = false;
         state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + direction, 1);
-        if (calGrid) {
-          calGrid.classList.remove("swipe-next", "swipe-prev");
-          void calGrid.offsetWidth;
-          calGrid.classList.add(direction > 0 ? "swipe-next" : "swipe-prev");
-        }
       } else {
         state.activeDate.setDate(state.activeDate.getDate() + direction * 7);
       }
+
       updateCountsAndTitle();
       renderCalendarMonth();
       renderWeekView();
+
+      const periodTitle = document.getElementById("current-period-title");
+      const calGrid = document.getElementById("calendar-days-grid");
+      const dayPanel = document.getElementById("selected-day-panel");
+      const weekGrid = document.getElementById("week-columns-grid");
+
+      triggerSlideAnimation(periodTitle, animClass);
+      if (state.currentView === "month") {
+        triggerSlideAnimation(calGrid, animClass);
+        triggerSlideAnimation(dayPanel, animClass);
+      } else {
+        triggerSlideAnimation(weekGrid, animClass);
+      }
     }
 
     document.getElementById("btn-nav-prev")?.addEventListener("click", () => stepPeriod(-1));
     document.getElementById("btn-nav-next")?.addEventListener("click", () => stepPeriod(1));
 
-    // Horizontal swipe on calendar wrapper to change months
-    const calendarWrapper = document.querySelector("#calendar-view .calendar-wrapper");
-    if (calendarWrapper) {
-      let swipeStartX = 0;
-      let swipeStartY = 0;
-      let swipeStartTime = 0;
-      let isTrackingSwipe = false;
+    // Horizontal swipe on Month Calendar & Week View to change months or weeks
+    function attachPeriodSwipeGesture(containerEl) {
+      if (!containerEl) return;
+      let startX = 0;
+      let startY = 0;
+      let lastX = 0;
+      let lastY = 0;
+      let startTime = 0;
+      let isTracking = false;
+      let isHorizontal = null;
 
-      calendarWrapper.addEventListener("touchstart", (e) => {
+      function getActiveGridEl() {
+        return state.currentView === "month"
+          ? document.getElementById("calendar-days-grid")
+          : document.getElementById("week-columns-grid");
+      }
+
+      function resetDragPreview() {
+        const gridEl = getActiveGridEl();
+        if (gridEl) {
+          gridEl.style.transition = "";
+          gridEl.style.transform = "";
+        }
+      }
+
+      containerEl.addEventListener("touchstart", (e) => {
         if (!e.touches || e.touches.length !== 1) return;
-        swipeStartX = e.touches[0].clientX;
-        swipeStartY = e.touches[0].clientY;
-        swipeStartTime = Date.now();
-        isTrackingSwipe = true;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        lastX = startX;
+        lastY = startY;
+        startTime = Date.now();
+        isTracking = true;
+        isHorizontal = null;
       }, { passive: true });
 
-      calendarWrapper.addEventListener("touchend", (e) => {
-        if (!isTrackingSwipe || !e.changedTouches || e.changedTouches.length === 0) return;
-        isTrackingSwipe = false;
-        const deltaX = e.changedTouches[0].clientX - swipeStartX;
-        const deltaY = e.changedTouches[0].clientY - swipeStartY;
-        const elapsed = Date.now() - swipeStartTime;
+      containerEl.addEventListener("touchmove", (e) => {
+        if (!isTracking || !e.touches || e.touches.length !== 1) return;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        const dx = lastX - startX;
+        const dy = lastY - startY;
 
-        if (elapsed < 800 && Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
-          if (deltaX < 0) {
-            stepPeriod(1);
+        if (isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+          // On desktop week view (>768px) if horizontally scrollable, don't hijack native scroll
+          if (state.currentView === "week" && window.innerWidth > 768 && containerEl.scrollWidth > containerEl.clientWidth) {
+            isHorizontal = false;
           } else {
-            stepPeriod(-1);
+            isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.1;
           }
         }
-      }, { passive: true });
 
-      calendarWrapper.addEventListener("touchcancel", () => {
-        isTrackingSwipe = false;
-      }, { passive: true });
+        if (isHorizontal === true) {
+          if (e.cancelable) e.preventDefault();
+          const gridEl = getActiveGridEl();
+          if (gridEl) {
+            gridEl.style.transition = "none";
+            gridEl.style.transform = `translateX(${Math.max(-60, Math.min(60, dx * 0.35))}px)`;
+          }
+        }
+      }, { passive: false });
+
+      function finishTouchSwipe() {
+        if (!isTracking) return;
+        isTracking = false;
+        resetDragPreview();
+        const dx = lastX - startX;
+        const dy = lastY - startY;
+        const elapsed = Date.now() - startTime;
+
+        if (isHorizontal === true && Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(dy) && elapsed < 1000) {
+          state.didJustSwipe = true;
+          setTimeout(() => { state.didJustSwipe = false; }, 220);
+          stepPeriod(dx < 0 ? 1 : -1);
+        }
+        isHorizontal = null;
+      }
+
+      containerEl.addEventListener("touchend", finishTouchSwipe, { passive: true });
+      containerEl.addEventListener("touchcancel", finishTouchSwipe, { passive: true });
+
+      // Pointer drag fallback for desktop mobile-emulator / mouse swipe testing
+      let mouseDown = false;
+      let mouseStartX = 0;
+      let mouseStartY = 0;
+
+      containerEl.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        mouseDown = true;
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
+      });
+
+      window.addEventListener("mouseup", (e) => {
+        if (!mouseDown) return;
+        mouseDown = false;
+        const dx = e.clientX - mouseStartX;
+        const dy = e.clientY - mouseStartY;
+        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+          state.didJustSwipe = true;
+          setTimeout(() => { state.didJustSwipe = false; }, 220);
+          stepPeriod(dx < 0 ? 1 : -1);
+        }
+      });
     }
+
+    attachPeriodSwipeGesture(document.querySelector("#calendar-view .calendar-wrapper"));
+    attachPeriodSwipeGesture(document.getElementById("week-view"));
 
     document.getElementById("btn-nav-today")?.addEventListener("click", () => {
       playPop();

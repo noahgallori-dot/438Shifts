@@ -725,6 +725,7 @@ body::before {
   max-width: 1240px;
   margin: 0 auto;
   padding: 1.25rem 1.25rem 5rem 1.25rem;
+  overflow-x: hidden;
 }
 
 .view-container {
@@ -779,22 +780,44 @@ body::before {
   gap: 1px;
 }
 
-.calendar-days-grid.swipe-next {
-  animation: calendarSwipeNext 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+.calendar-days-grid.swipe-next,
+.week-columns-grid.swipe-next,
+.selected-day-panel.swipe-next {
+  animation: calendarSwipeNext 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.calendar-days-grid.swipe-prev {
-  animation: calendarSwipePrev 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+.calendar-days-grid.swipe-prev,
+.week-columns-grid.swipe-prev,
+.selected-day-panel.swipe-prev {
+  animation: calendarSwipePrev 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.current-period-label.swipe-next {
+  animation: periodTitleSlideNext 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.current-period-label.swipe-prev {
+  animation: periodTitleSlidePrev 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes calendarSwipeNext {
-  from { opacity: 0.45; transform: translateX(28px); }
-  to { opacity: 1; transform: translateX(0); }
+  0% { opacity: 0; transform: translateX(44px) scale(0.985); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 @keyframes calendarSwipePrev {
-  from { opacity: 0.45; transform: translateX(-28px); }
-  to { opacity: 1; transform: translateX(0); }
+  0% { opacity: 0; transform: translateX(-44px) scale(0.985); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes periodTitleSlideNext {
+  0% { opacity: 0; transform: translateX(18px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes periodTitleSlidePrev {
+  0% { opacity: 0; transform: translateX(-18px); }
+  100% { opacity: 1; transform: translateX(0); }
 }
 
 .calendar-day-cell {

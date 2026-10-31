@@ -371,6 +371,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     currentView: "month",
     activeDate: new Date(),
     selectedCalendarDay: formatDateKey(new Date()),
+    userSelectedCalendarDay: false,
     filterMineOnly: false,
     selectedLevels: new Set(["1", "2", "3", "4", "5", "6"]),
     userProfile: null,
@@ -378,6 +379,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     shifts: [],
     associates: [],
     selectedShiftId: null,
+    editingShiftId: null,
     selectedAvatarPreset: "avatar-1",
     uploadedAvatarDataUrl: null,
     pendingVerification: null,
@@ -457,13 +459,24 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (row.data && typeof row.data === "object") {
       return { ...row.data, id: row.id || row.data.id };
     }
+    let rawStatus = String(row.status || "open");
+    let offerFromStatus = 0;
+    if (rawStatus.startsWith("open$")) {
+      offerFromStatus = parseInt(rawStatus.slice(5), 10) || 0;
+      rawStatus = "open";
+    }
+    const offerAmount = Math.max(
+      0,
+      Math.min(100, parseInt(row.offer_amount ?? row.offerAmount ?? offerFromStatus ?? 0, 10) || 0)
+    );
     return {
       id: row.id,
       date: row.date,
       startTime: row.start_time || row.startTime || "16:00",
       endTime: row.end_time || row.endTime || "22:30",
       notes: row.notes || "",
-      status: row.status || "open",
+      offerAmount,
+      status: rawStatus,
       authorId: row.author_id || row.authorId || "",
       authorName: row.author_name || row.authorName || "Associate",
       authorEmail: row.author_email || row.authorEmail || "",
@@ -475,20 +488,45 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     };
   }
 
+  function resolveShiftAvatar(shift) {
+    if (!shift) return "👨‍🍳";
+    if (shift.authorAvatar && String(shift.authorAvatar).startsWith("data:image")) {
+      return shift.authorAvatar;
+    }
+    if (state.userProfile && isShiftOwner(shift) && state.userProfile.avatar) {
+      return state.userProfile.avatar;
+    }
+    const assoc = state.associates.find(
+      a =>
+        a &&
+        ((shift.authorId && a.id === shift.authorId) ||
+          (shift.authorEmail && a.email && a.email.trim().toLowerCase() === shift.authorEmail.trim().toLowerCase()))
+    );
+    if (assoc && assoc.avatar) {
+      return assoc.avatar;
+    }
+    return shift.authorAvatar || "👨‍🍳";
+  }
+
   function mapShiftToDbRow(shift) {
+    const offerAmount = Math.max(0, Math.min(100, parseInt(shift.offerAmount || 0, 10) || 0));
+    const safeAvatar =
+      shift.authorAvatar && !String(shift.authorAvatar).startsWith("data:image")
+        ? shift.authorAvatar
+        : "👨‍🍳";
     return {
       id: shift.id,
       date: shift.date,
       start_time: shift.startTime,
       end_time: shift.endTime,
       notes: shift.notes || "",
-      status: "open",
+      status: offerAmount > 0 ? `open$${offerAmount}` : "open",
       author_id: shift.authorId,
       author_name: shift.authorName,
       author_email: shift.authorEmail || "",
       author_phone: shift.authorPhone || "",
       author_level: Number(shift.authorLevel || 1),
-      author_avatar: shift.authorAvatar || "👨‍🍳",
+      author_avatar: safeAvatar,
       author_avatar_bg: shift.authorAvatarBg || "#FFE8E6",
       created_at: shift.createdAt || new Date().toISOString()
     };
@@ -659,7 +697,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       // 1. Fetch Shifts (and backed-up Config + Associate Roster) from Supabase
       const shiftsRes = await fetch(`${SUPABASE_REST_URL}/shifts?select=*&order=created_at.desc`, {
         method: "GET",
-        headers: getSupabaseHeaders({ "Cache-Control": "no-cache" })
+        cache: "no-store",
+        headers: getSupabaseHeaders()
       });
 
       if (shiftsRes.ok) {
@@ -747,6 +786,9 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
           state.shifts = cloudShifts;
           saveShiftsLocalOnly(state.shifts);
+          updateCountsAndTitle();
+          renderCalendarMonth();
+          renderWeekView();
         }
       }
 
@@ -755,7 +797,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       try {
         const assocRes = await fetch(`${SUPABASE_REST_URL}/associates?select=*&order=joined_at.desc`, {
           method: "GET",
-          headers: getSupabaseHeaders({ "Cache-Control": "no-cache" })
+          cache: "no-store",
+          headers: getSupabaseHeaders()
         });
 
         if (assocRes.ok) {
@@ -842,7 +885,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           }
 
       updateCountsAndTitle();
-      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+      renderCalendarMonth();
+      renderWeekView();
 
       const managerModal = document.getElementById("modal-manager-hub");
       if (managerModal && managerModal.classList.contains("active")) {
@@ -975,19 +1019,82 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (!container) return;
     const toast = document.createElement("div");
     toast.className = `toast ${type === "success" ? "toast-success" : type === "error" ? "toast-error" : ""}`;
+    toast.title = "Click or swipe to dismiss";
     const iconSvg = type === "success"
       ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>`
       : type === "error"
       ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`
       : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB81C" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
-    toast.innerHTML = `<span style="display:inline-flex;flex-shrink:0;">${iconSvg}</span> <span>${message}</span>`;
+    toast.innerHTML = `<span style="display:inline-flex;flex-shrink:0;">${iconSvg}</span> <span style="flex:1;">${message}</span> <span class="toast-close-x" aria-hidden="true">✕</span>`;
     container.appendChild(toast);
-    setTimeout(() => {
-      toast.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+
+    let dismissed = false;
+    let autoTimer = null;
+
+    function dismissToast(exitTransform = "translateY(10px) scale(0.95)") {
+      if (dismissed) return;
+      dismissed = true;
+      if (autoTimer) clearTimeout(autoTimer);
+      toast.style.transition = "opacity 0.22s ease, transform 0.22s ease";
       toast.style.opacity = "0";
-      toast.style.transform = "translateY(10px)";
-      setTimeout(() => toast.remove(), 250);
-    }, 4000);
+      toast.style.transform = exitTransform;
+      toast.style.pointerEvents = "none";
+      setTimeout(() => toast.remove(), 220);
+    }
+
+    autoTimer = setTimeout(() => dismissToast(), 4000);
+
+    // Click or swipe to dismiss
+    let startX = 0;
+    let startY = 0;
+    let deltaX = 0;
+    let deltaY = 0;
+    let isDragging = false;
+
+    toast.addEventListener("pointerdown", (e) => {
+      if (dismissed) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      deltaX = 0;
+      deltaY = 0;
+      toast.style.transition = "none";
+      try {
+        toast.setPointerCapture(e.pointerId);
+      } catch (err) {}
+    });
+
+    toast.addEventListener("pointermove", (e) => {
+      if (!isDragging || dismissed) return;
+      deltaX = e.clientX - startX;
+      deltaY = e.clientY - startY;
+      const dist = Math.hypot(deltaX, deltaY);
+      toast.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      toast.style.opacity = String(Math.max(0.25, 1 - dist / 160));
+    });
+
+    function finishGesture() {
+      if (!isDragging || dismissed) return;
+      isDragging = false;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+      // Dismiss on tap/click (small movement) or swipe in any direction
+      if (absX < 8 && absY < 8) {
+        dismissToast("scale(0.92)");
+      } else if (absX > 35 || absY > 28) {
+        const outX = absX >= absY ? (deltaX > 0 ? 220 : -220) : deltaX * 1.5;
+        const outY = absY > absX ? (deltaY > 0 ? 120 : -120) : deltaY * 1.5;
+        dismissToast(`translate(${outX}px, ${outY}px)`);
+      } else {
+        toast.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+        toast.style.transform = "translate(0, 0)";
+        toast.style.opacity = "1";
+      }
+    }
+
+    toast.addEventListener("pointerup", finishGesture);
+    toast.addEventListener("pointercancel", finishGesture);
+    toast.addEventListener("click", () => dismissToast("scale(0.92)"));
   }
 
   // ==========================================================================
@@ -1050,7 +1157,18 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     state.shifts = shifts;
     try {
       localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(shifts));
-    } catch (e) {}
+    } catch (e) {
+      try {
+        const compactShifts = shifts.map(s => ({
+          ...s,
+          authorAvatar:
+            s.authorAvatar && !String(s.authorAvatar).startsWith("data:image")
+              ? s.authorAvatar
+              : "👨‍🍳"
+        }));
+        localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(compactShifts));
+      } catch (e2) {}
+    }
   }
 
   function saveShifts(shifts) {
@@ -1077,7 +1195,18 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     state.associates = roster;
     try {
       localStorage.setItem(STORAGE_KEY_ROSTER, JSON.stringify(roster));
-    } catch (e) {}
+    } catch (e) {
+      try {
+        const compactRoster = roster.map(a => ({
+          ...a,
+          avatar:
+            a.avatar && !String(a.avatar).startsWith("data:image")
+              ? a.avatar
+              : "👨‍🍳"
+        }));
+        localStorage.setItem(STORAGE_KEY_ROSTER, JSON.stringify(compactRoster));
+      } catch (e2) {}
+    }
   }
 
   function saveAssociatesRoster(roster) {
@@ -1351,6 +1480,25 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       shiftMap[s.date].push(s);
     });
 
+    // If the currently selected day has no shifts (and the user hasn't explicitly clicked a day)
+    // or is outside the viewed month, automatically select the nearest shift day in the current month
+    // so the shifts drawer immediately shows the month's shifts on initial load.
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+    const monthShiftDates = Object.keys(shiftMap)
+      .filter(d => d.startsWith(monthPrefix) && shiftMap[d].length > 0)
+      .sort();
+
+    if (monthShiftDates.length > 0) {
+      const selectedInMonth = state.selectedCalendarDay && state.selectedCalendarDay.startsWith(monthPrefix);
+      const selectedHasShifts = (shiftMap[state.selectedCalendarDay] || []).length > 0;
+      if (!selectedInMonth || (!state.userSelectedCalendarDay && !selectedHasShifts)) {
+        const upcomingInMonth = monthShiftDates.find(d => d >= todayKey);
+        state.selectedCalendarDay = upcomingInMonth || monthShiftDates[0];
+      }
+    } else if (!state.selectedCalendarDay || !state.selectedCalendarDay.startsWith(monthPrefix)) {
+      state.selectedCalendarDay = todayKey.startsWith(monthPrefix) ? todayKey : `${monthPrefix}01`;
+    }
+
     for (let i = startDayOfWeek - 1; i >= 0; i--) {
       const prevDate = new Date(year, month - 1, prevMonthLastDay - i);
       const dateKey = formatDateKey(prevDate);
@@ -1395,7 +1543,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     }
     cell.appendChild(header);
 
-    // Mobile-friendly compact indicator (dots + count pill)
+    // Mobile-friendly compact indicator (dots + count pill + offer tag if > $0)
     if (shiftsOnDay.length > 0) {
       const mobileIndicator = document.createElement("div");
       mobileIndicator.className = "mobile-day-indicator";
@@ -1414,6 +1562,14 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       countPill.textContent = `${shiftsOnDay.length} shift${shiftsOnDay.length > 1 ? "s" : ""}`;
       mobileIndicator.appendChild(countPill);
 
+      const maxOffer = Math.max(0, ...shiftsOnDay.map(s => Number(s.offerAmount) || 0));
+      if (maxOffer > 0) {
+        const offerPill = document.createElement("span");
+        offerPill.className = "mobile-day-offer";
+        offerPill.textContent = `$${maxOffer}`;
+        mobileIndicator.appendChild(offerPill);
+      }
+
       cell.appendChild(mobileIndicator);
     }
 
@@ -1421,9 +1577,10 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     shiftsContainer.className = "day-shifts-container";
 
     shiftsOnDay.slice(0, 3).forEach(shift => {
+      const offerAmount = Number(shift.offerAmount) || 0;
       const chip = document.createElement("div");
       chip.className = "mini-shift-chip";
-      chip.title = `${shift.authorName} (L${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}`;
+      chip.title = `${shift.authorName} (L${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""}`;
 
       const timeSpan = document.createElement("span");
       timeSpan.className = "mini-shift-time";
@@ -1435,6 +1592,13 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
       chip.appendChild(timeSpan);
       chip.appendChild(nameSpan);
+
+      if (offerAmount > 0) {
+        const offerSpan = document.createElement("span");
+        offerSpan.className = "mini-shift-offer";
+        offerSpan.textContent = `$${offerAmount}`;
+        chip.appendChild(offerSpan);
+      }
 
       chip.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1457,6 +1621,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
     cell.addEventListener("click", () => {
       playPop();
+      state.userSelectedCalendarDay = true;
       state.selectedCalendarDay = dateKey;
       document.querySelectorAll(".calendar-day-cell").forEach(c => c.classList.remove("selected"));
       cell.classList.add("selected");
@@ -1580,10 +1745,11 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     card.dataset.shiftId = shift.id;
 
     const duration = calculateDurationHours(shift.startTime, shift.endTime);
-    const avatarMarkup = renderAvatarMarkup(shift.authorAvatar, shift.authorName);
+    const avatarMarkup = renderAvatarMarkup(resolveShiftAvatar(shift), shift.authorName);
 
     const badgeLabel = isWeekly ? `L${shift.authorLevel}` : `Level ${shift.authorLevel}`;
     const isMine = isShiftOwner(shift);
+    const offerAmount = Number(shift.offerAmount) || 0;
 
     card.innerHTML = `
       <div class="shift-card-top">
@@ -1595,8 +1761,11 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
             <div class="shift-author-name" title="${shift.authorName}">${shift.authorName}</div>
           </div>
         </div>
-        <div class="level-badge l${shift.authorLevel}">
-          ${badgeLabel}
+        <div class="shift-card-badges">
+          ${offerAmount > 0 ? `<div class="shift-offer-badge" title="Offering $${offerAmount} to take this shift">$${offerAmount}</div>` : ""}
+          <div class="level-badge l${shift.authorLevel}">
+            ${badgeLabel}
+          </div>
         </div>
       </div>
 
@@ -1615,11 +1784,22 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           <span>${isMine ? "Your Shift Post" : "Available"}</span>
         </div>
         <div style="display:flex; align-items:center; gap:0.4rem;">
+          ${(isMine || state.isAdmin) ? `<button type="button" class="btn-card-edit" title="Edit shift details"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>` : ""}
           ${state.isAdmin ? `<button type="button" class="btn-card-delete" title="Manager: Delete this shift"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg> Delete</button>` : ""}
           <span class="btn-card-action">Details →</span>
         </div>
       </div>
     `;
+
+    // Quick-edit button right on the card
+    const editBtn = card.querySelector(".btn-card-edit");
+    if (editBtn) {
+      editBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        playPop();
+        openPostShiftModal(null, shift);
+      });
+    }
 
     // Manager quick-delete button right on the card
     const deleteBtn = card.querySelector(".btn-card-delete");
@@ -1653,7 +1833,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
     const avatarEl = document.getElementById("detail-associate-avatar");
     if (avatarEl) {
-      avatarEl.innerHTML = renderAvatarMarkup(shift.authorAvatar, shift.authorName);
+      avatarEl.innerHTML = renderAvatarMarkup(resolveShiftAvatar(shift), shift.authorName);
       avatarEl.style.background = shift.authorAvatarBg || "#FFF8E6";
     }
 
@@ -1669,6 +1849,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     if (dateEl) dateEl.textContent = formatDateHuman(shift.date);
     if (hoursEl) hoursEl.textContent = `${formatTime12h(shift.startTime)} – ${formatTime12h(shift.endTime)}`;
     if (durEl) durEl.textContent = `${duration} hrs`;
+
+    const offerContainer = document.getElementById("detail-offer-container");
+    const offerText = document.getElementById("detail-shift-offer");
+    const offerAmount = Number(shift.offerAmount) || 0;
+    if (offerAmount > 0) {
+      if (offerContainer) offerContainer.style.display = "flex";
+      if (offerText) offerText.textContent = `$${offerAmount}`;
+    } else {
+      if (offerContainer) offerContainer.style.display = "none";
+    }
 
     const notesContainer = document.getElementById("detail-notes-container");
     const notesText = document.getElementById("detail-shift-notes");
@@ -1731,8 +1921,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
     }
 
-    // ONLY the person who posted the shift can see and click "Cover Shift"
+    // ONLY the person who posted the shift (or Manager) can edit it; ONLY the poster can mark as "Cover Shift"
     const isMine = isShiftOwner(shift);
+    const editShiftBtn = document.getElementById("btn-edit-shift");
+    if (editShiftBtn) {
+      editShiftBtn.style.display = (isMine || state.isAdmin) ? "inline-flex" : "none";
+    }
     const coveredBtn = document.getElementById("btn-shift-covered");
     if (coveredBtn) {
       coveredBtn.style.display = isMine ? "inline-flex" : "none";
@@ -1754,27 +1948,58 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   // ==========================================================================
-  // Modal: Post Shift
+  // Modal: Post / Edit Shift
   // ==========================================================================
-  function openPostShiftModal(prefilledDate = null) {
-    if (!hasCompleteProfile()) {
+  function openPostShiftModal(prefilledDate = null, shiftToEdit = null) {
+    if (!shiftToEdit && !hasCompleteProfile()) {
       showToast("Setup Required: Please complete your profile with verified email before posting a shift!", "error");
       openProfileModal(true);
       return;
     }
-    if (!state.isAdmin && !isApprovedProfile()) {
+    if (!shiftToEdit && !state.isAdmin && !isApprovedProfile()) {
       showToast("Your account request is pending manager approval before you can post shifts.", "default");
       return;
     }
 
+    state.editingShiftId = shiftToEdit ? shiftToEdit.id : null;
+
     const modal = document.getElementById("modal-post-shift");
+    const modalBadge = document.getElementById("post-shift-modal-badge");
+    const modalTitle = document.getElementById("post-shift-modal-title");
+    const modalSub = document.getElementById("post-shift-modal-sub");
+    const submitText = document.getElementById("btn-submit-shift-text");
     const dateInput = document.getElementById("post-date");
     const startTimeInput = document.getElementById("post-start-time");
     const endTimeInput = document.getElementById("post-end-time");
+    const notesInput = document.getElementById("post-notes");
     const durationLabel = document.getElementById("post-calc-duration");
+    const offerSlider = document.getElementById("post-offer-slider");
+    const offerDisplay = document.getElementById("post-offer-display");
 
-    const targetDate = prefilledDate || state.selectedCalendarDay || formatDateKey(new Date());
-    if (dateInput) dateInput.value = targetDate;
+    if (shiftToEdit) {
+      if (modalBadge) modalBadge.textContent = "EDIT SHIFT";
+      if (modalTitle) modalTitle.textContent = "Edit Shift Details";
+      if (modalSub) modalSub.textContent = "Update your shift date, time, cash offer, or coworker note.";
+      if (submitText) submitText.textContent = "Save Shift Changes";
+
+      if (dateInput) dateInput.value = shiftToEdit.date || formatDateKey(new Date());
+      if (startTimeInput) startTimeInput.value = shiftToEdit.startTime || "16:00";
+      if (endTimeInput) endTimeInput.value = shiftToEdit.endTime || "22:30";
+      if (notesInput) notesInput.value = shiftToEdit.notes || "";
+      if (offerSlider) offerSlider.value = String(Math.max(0, Math.min(100, parseInt(shiftToEdit.offerAmount || 0, 10) || 0)));
+    } else {
+      if (modalBadge) modalBadge.textContent = "STORE #438";
+      if (modalTitle) modalTitle.textContent = "Post a Shift to Cover or Trade";
+      if (modalSub) modalSub.textContent = "Drop your shift so your coworkers can see it and text/call you.";
+      if (submitText) submitText.textContent = "Post Shift to Board";
+
+      const targetDate = prefilledDate || state.selectedCalendarDay || formatDateKey(new Date());
+      if (dateInput) dateInput.value = targetDate;
+      if (startTimeInput) startTimeInput.value = "16:00";
+      if (endTimeInput) endTimeInput.value = "22:30";
+      if (notesInput) notesInput.value = "";
+      if (offerSlider) offerSlider.value = "0";
+    }
 
     function updateHelperDuration() {
       if (durationLabel && startTimeInput && endTimeInput) {
@@ -1782,6 +2007,23 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         durationLabel.textContent = `${dur} hours`;
       }
     }
+
+    function updateOfferDisplay() {
+      if (!offerSlider || !offerDisplay) return;
+      const val = parseInt(offerSlider.value, 10) || 0;
+      if (val > 0) {
+        offerDisplay.textContent = `Offering $${val}`;
+        offerDisplay.classList.remove("is-zero");
+      } else {
+        offerDisplay.textContent = "$0 (No Offer)";
+        offerDisplay.classList.add("is-zero");
+      }
+    }
+
+    if (offerSlider) {
+      offerSlider.oninput = updateOfferDisplay;
+    }
+    updateOfferDisplay();
 
     if (startTimeInput) startTimeInput.oninput = updateHelperDuration;
     if (endTimeInput) endTimeInput.oninput = updateHelperDuration;
@@ -2573,31 +2815,37 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     document.getElementById("btn-nav-prev")?.addEventListener("click", () => {
       playPop();
       if (state.currentView === "month") {
-        state.activeDate.setMonth(state.activeDate.getMonth() - 1);
+        state.userSelectedCalendarDay = false;
+        state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() - 1, 1);
       } else {
         state.activeDate.setDate(state.activeDate.getDate() - 7);
       }
       updateCountsAndTitle();
-      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+      renderCalendarMonth();
+      renderWeekView();
     });
 
     document.getElementById("btn-nav-next")?.addEventListener("click", () => {
       playPop();
       if (state.currentView === "month") {
-        state.activeDate.setMonth(state.activeDate.getMonth() + 1);
+        state.userSelectedCalendarDay = false;
+        state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + 1, 1);
       } else {
         state.activeDate.setDate(state.activeDate.getDate() + 7);
       }
       updateCountsAndTitle();
-      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+      renderCalendarMonth();
+      renderWeekView();
     });
 
     document.getElementById("btn-nav-today")?.addEventListener("click", () => {
       playPop();
       state.activeDate = new Date();
+      state.userSelectedCalendarDay = true;
       state.selectedCalendarDay = formatDateKey(new Date());
       updateCountsAndTitle();
-      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+      renderCalendarMonth();
+      renderWeekView();
     });
 
     // 3. Brand Logo: Hold 1s to Unlock Manager; Once Logged In, Tap Logo to Open Manager Dashboard
@@ -3380,17 +3628,25 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
     });
 
-    // 12. Post Shift Form Submit (Syncs to Supabase)
+    // 12. Post / Edit Shift Form Submit (Syncs to Supabase)
     document.getElementById("form-post-shift")?.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      if (!hasCompleteProfile()) {
-        showToast("Setup Required: Please complete your profile before posting a shift!", "error");
-        openProfileModal(true);
-        return;
-      }
-      if (!state.isAdmin && !isApprovedProfile()) {
-        showToast("Your account request is pending manager approval before you can post shifts.", "default");
+      const editingId = state.editingShiftId;
+      const existingShift = editingId ? state.shifts.find(s => s.id === editingId) : null;
+
+      if (!existingShift) {
+        if (!hasCompleteProfile()) {
+          showToast("Setup Required: Please complete your profile before posting a shift!", "error");
+          openProfileModal(true);
+          return;
+        }
+        if (!state.isAdmin && !isApprovedProfile()) {
+          showToast("Your account request is pending manager approval before you can post shifts.", "default");
+          return;
+        }
+      } else if (!isShiftOwner(existingShift) && !state.isAdmin) {
+        showToast("Only the person who posted this shift can edit its details!", "error");
         return;
       }
 
@@ -3398,9 +3654,35 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const startTimeVal = document.getElementById("post-start-time")?.value;
       const endTimeVal = document.getElementById("post-end-time")?.value;
       const notesVal = document.getElementById("post-notes")?.value.trim();
+      const offerVal = Math.max(
+        0,
+        Math.min(100, parseInt(document.getElementById("post-offer-slider")?.value || "0", 10) || 0)
+      );
 
       if (!dateVal || !startTimeVal || !endTimeVal) {
         showToast("Please provide date, start time, and end time", "error");
+        return;
+      }
+
+      if (existingShift) {
+        existingShift.date = dateVal;
+        existingShift.startTime = startTimeVal;
+        existingShift.endTime = endTimeVal;
+        existingShift.notes = notesVal;
+        existingShift.offerAmount = offerVal;
+
+        saveShifts(state.shifts);
+        upsertShiftToSupabase(existingShift);
+
+        state.editingShiftId = null;
+        playSuccess();
+        showToast("Shift details updated!", "success");
+        closeModal(document.getElementById("modal-post-shift"));
+        document.getElementById("form-post-shift")?.reset();
+
+        state.selectedCalendarDay = dateVal;
+        updateCountsAndTitle();
+        state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
         return;
       }
 
@@ -3410,6 +3692,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         startTime: startTimeVal,
         endTime: endTimeVal,
         notes: notesVal,
+        offerAmount: offerVal,
         status: "open",
         authorId: state.userProfile.id,
         authorName: state.userProfile.name,
@@ -3425,6 +3708,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       saveShifts(state.shifts);
       upsertShiftToSupabase(newShift);
 
+      state.editingShiftId = null;
       playSuccess();
       showToast("Shift posted & synced to 438 Shifts board!", "success");
       closeModal(document.getElementById("modal-post-shift"));
@@ -3433,6 +3717,21 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       state.selectedCalendarDay = dateVal;
       updateCountsAndTitle();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+    });
+
+    // 12b. Edit Shift Action inside Shift Details Modal
+    document.getElementById("btn-edit-shift")?.addEventListener("click", () => {
+      const shift = state.shifts.find(s => s.id === state.selectedShiftId);
+      if (!shift) return;
+
+      if (!isShiftOwner(shift) && !state.isAdmin) {
+        showToast("Only the person who posted this shift can edit its details!", "error");
+        return;
+      }
+
+      playPop();
+      closeModal(document.getElementById("modal-shift-details"));
+      openPostShiftModal(null, shift);
     });
 
     // 13. Cover Shift Action (ONLY the person who posted the shift can click this; removes it forever!)

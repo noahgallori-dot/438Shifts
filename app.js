@@ -1458,13 +1458,33 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   // ==========================================================================
   // Calendar Month View
   // ==========================================================================
-  function renderCalendarMonth() {
-    const grid = document.getElementById("calendar-days-grid");
+  function getDefaultSelectedDayForMonth(year, month, shiftMap, preserveUserSelected = true) {
+    const todayKey = formatDateKey(new Date());
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+    const monthShiftDates = Object.keys(shiftMap)
+      .filter(d => d.startsWith(monthPrefix) && shiftMap[d].length > 0)
+      .sort();
+
+    let selectedDay = state.selectedCalendarDay;
+    if (monthShiftDates.length > 0) {
+      const selectedInMonth = selectedDay && selectedDay.startsWith(monthPrefix);
+      const selectedHasShifts = (shiftMap[selectedDay] || []).length > 0;
+      if (!selectedInMonth || (!preserveUserSelected && !selectedHasShifts)) {
+        const upcomingInMonth = monthShiftDates.find(d => d >= todayKey);
+        selectedDay = upcomingInMonth || monthShiftDates[0];
+      }
+    } else if (!selectedDay || !selectedDay.startsWith(monthPrefix)) {
+      selectedDay = todayKey.startsWith(monthPrefix) ? todayKey : `${monthPrefix}01`;
+    }
+    return selectedDay;
+  }
+
+  function populateCalendarMonthGrid(grid, dateObj, isPreview = false) {
     if (!grid) return;
     grid.innerHTML = "";
 
-    const year = state.activeDate.getFullYear();
-    const month = state.activeDate.getMonth();
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth();
     const firstDay = new Date(year, month, 1);
     const startDayOfWeek = firstDay.getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1478,35 +1498,26 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       shiftMap[s.date].push(s);
     });
 
-    // If the currently selected day has no shifts (and the user hasn't explicitly clicked a day)
-    // or is outside the viewed month, automatically select the nearest shift day in the current month
-    // so the shifts drawer immediately shows the month's shifts on initial load.
-    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
-    const monthShiftDates = Object.keys(shiftMap)
-      .filter(d => d.startsWith(monthPrefix) && shiftMap[d].length > 0)
-      .sort();
-
-    if (monthShiftDates.length > 0) {
-      const selectedInMonth = state.selectedCalendarDay && state.selectedCalendarDay.startsWith(monthPrefix);
-      const selectedHasShifts = (shiftMap[state.selectedCalendarDay] || []).length > 0;
-      if (!selectedInMonth || (!state.userSelectedCalendarDay && !selectedHasShifts)) {
-        const upcomingInMonth = monthShiftDates.find(d => d >= todayKey);
-        state.selectedCalendarDay = upcomingInMonth || monthShiftDates[0];
-      }
-    } else if (!state.selectedCalendarDay || !state.selectedCalendarDay.startsWith(monthPrefix)) {
-      state.selectedCalendarDay = todayKey.startsWith(monthPrefix) ? todayKey : `${monthPrefix}01`;
+    const selectedDay = getDefaultSelectedDayForMonth(
+      year,
+      month,
+      shiftMap,
+      isPreview ? false : state.userSelectedCalendarDay
+    );
+    if (!isPreview) {
+      state.selectedCalendarDay = selectedDay;
     }
 
     for (let i = startDayOfWeek - 1; i >= 0; i--) {
       const prevDate = new Date(year, month - 1, prevMonthLastDay - i);
       const dateKey = formatDateKey(prevDate);
-      grid.appendChild(createDayCell(prevDate, dateKey, true, shiftMap[dateKey] || [], todayKey));
+      grid.appendChild(createDayCell(prevDate, dateKey, true, shiftMap[dateKey] || [], todayKey, selectedDay));
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
       const curDate = new Date(year, month, day);
       const dateKey = formatDateKey(curDate);
-      grid.appendChild(createDayCell(curDate, dateKey, false, shiftMap[dateKey] || [], todayKey));
+      grid.appendChild(createDayCell(curDate, dateKey, false, shiftMap[dateKey] || [], todayKey, selectedDay));
     }
 
     const totalSoFar = startDayOfWeek + daysInMonth;
@@ -1514,15 +1525,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     for (let day = 1; day <= targetTotal - totalSoFar; day++) {
       const nextDate = new Date(year, month + 1, day);
       const dateKey = formatDateKey(nextDate);
-      grid.appendChild(createDayCell(nextDate, dateKey, true, shiftMap[dateKey] || [], todayKey));
+      grid.appendChild(createDayCell(nextDate, dateKey, true, shiftMap[dateKey] || [], todayKey, selectedDay));
     }
+  }
 
+  function renderCalendarMonth() {
+    const grid = document.getElementById("calendar-days-grid");
+    if (!grid) return;
+    populateCalendarMonthGrid(grid, state.activeDate, false);
     renderSelectedDayPanel();
   }
 
-  function createDayCell(dateObj, dateKey, isOtherMonth, shiftsOnDay, todayKey) {
+  function createDayCell(dateObj, dateKey, isOtherMonth, shiftsOnDay, todayKey, selectedDay = state.selectedCalendarDay) {
     const cell = document.createElement("div");
-    cell.className = `calendar-day-cell ${isOtherMonth ? "other-month" : ""} ${dateKey === todayKey ? "is-today" : ""} ${dateKey === state.selectedCalendarDay ? "selected" : ""}`;
+    cell.className = `calendar-day-cell ${isOtherMonth ? "other-month" : ""} ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDay ? "selected" : ""}`;
     cell.dataset.date = dateKey;
 
     const header = document.createElement("div");
@@ -1669,12 +1685,11 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   // ==========================================================================
   // Weekly View
   // ==========================================================================
-  function renderWeekView() {
-    const grid = document.getElementById("week-columns-grid");
+  function populateWeekGrid(grid, dateObj) {
     if (!grid) return;
     grid.innerHTML = "";
 
-    const startOfWeek = getStartOfWeek(state.activeDate);
+    const startOfWeek = getStartOfWeek(dateObj);
     const todayKey = formatDateKey(new Date());
     const filteredShifts = getFilteredShifts();
     const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -1727,6 +1742,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       column.appendChild(shiftsList);
       grid.appendChild(column);
     }
+  }
+
+  function renderWeekView() {
+    const grid = document.getElementById("week-columns-grid");
+    if (!grid) return;
+    populateWeekGrid(grid, state.activeDate);
   }
 
   // ==========================================================================
@@ -2844,16 +2865,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     document.getElementById("btn-nav-prev")?.addEventListener("click", () => stepPeriod(-1));
     document.getElementById("btn-nav-next")?.addEventListener("click", () => stepPeriod(1));
 
-    // Horizontal swipe on Month Calendar & Week View to change months or weeks
+    // Horizontal swipe on Month Calendar & Week View: 1:1 finger tracking + velocity-matched completion
     function attachPeriodSwipeGesture(containerEl) {
       if (!containerEl) return;
       let startX = 0;
       let startY = 0;
       let lastX = 0;
       let lastY = 0;
-      let startTime = 0;
       let isTracking = false;
       let isHorizontal = null;
+      let previewEl = null;
+      let previewDir = 0;
+      let samples = [];
+      let animTimer = null;
+      let pendingCommitDir = 0;
 
       function getActiveGridEl() {
         return state.currentView === "month"
@@ -2861,92 +2886,259 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           : document.getElementById("week-columns-grid");
       }
 
-      function resetDragPreview() {
+      function cleanupSwipeElements() {
+        if (previewEl) {
+          previewEl.remove();
+          previewEl = null;
+        }
+        document.querySelectorAll(".swipe-preview-grid").forEach(el => el.remove());
+        previewDir = 0;
+        [document.getElementById("calendar-days-grid"), document.getElementById("week-columns-grid")].forEach(g => {
+          if (g) {
+            g.style.transition = "";
+            g.style.transform = "";
+            g.style.willChange = "";
+            if (g.parentElement) {
+              g.parentElement.style.minHeight = "";
+            }
+          }
+        });
+      }
+
+      function finishPendingAnimationImmediately() {
+        if (animTimer) {
+          clearTimeout(animTimer);
+          animTimer = null;
+        }
+        const dirToCommit = pendingCommitDir;
+        pendingCommitDir = 0;
+
+        if (dirToCommit !== 0) {
+          if (state.currentView === "month") {
+            state.userSelectedCalendarDay = false;
+            state.activeDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + dirToCommit, 1);
+          } else {
+            state.activeDate.setDate(state.activeDate.getDate() + dirToCommit * 7);
+          }
+          updateCountsAndTitle();
+          renderCalendarMonth();
+          renderWeekView();
+        }
+
+        cleanupSwipeElements();
+      }
+
+      function startDrag(clientX, clientY) {
+        if (animTimer) {
+          finishPendingAnimationImmediately();
+        }
+        startX = clientX;
+        startY = clientY;
+        lastX = clientX;
+        lastY = clientY;
+        isTracking = true;
+        isHorizontal = null;
+        samples = [{ x: clientX, t: performance.now() }];
+      }
+
+      function moveDrag(clientX, clientY, event) {
+        if (!isTracking) return;
+        lastX = clientX;
+        lastY = clientY;
+        const dx = lastX - startX;
+        const dy = lastY - startY;
+
+        if (isHorizontal === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+          // On desktop week view (>768px) if horizontally scrollable, don't hijack native scroll
+          if (state.currentView === "week" && window.innerWidth > 768 && containerEl.scrollWidth > containerEl.clientWidth) {
+            isHorizontal = false;
+          } else {
+            isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.05;
+          }
+        }
+
+        if (isHorizontal !== true) return;
+        if (event && event.cancelable) event.preventDefault();
+
+        const now = performance.now();
+        samples.push({ x: lastX, t: now });
+        while (samples.length > 2 && now - samples[0].t > 90) {
+          samples.shift();
+        }
+
         const gridEl = getActiveGridEl();
-        if (gridEl) {
-          gridEl.style.transition = "";
-          gridEl.style.transform = "";
+        const hostEl = gridEl?.parentElement;
+        if (!gridEl || !hostEl) return;
+
+        const width = gridEl.offsetWidth || hostEl.clientWidth || 360;
+        const gap = state.currentView === "week" ? 14 : 1;
+        const stride = width + gap;
+        const dir = dx < 0 ? 1 : (dx > 0 ? -1 : 0);
+
+        if (dir !== 0 && (!previewEl || previewDir !== dir)) {
+          if (!previewEl) {
+            previewEl = document.createElement("div");
+            hostEl.appendChild(previewEl);
+          }
+          previewEl.className = state.currentView === "month"
+            ? "calendar-days-grid swipe-preview-grid"
+            : "week-columns-grid swipe-preview-grid";
+          previewEl.style.position = "absolute";
+          previewEl.style.top = `${gridEl.offsetTop}px`;
+          previewEl.style.left = `${gridEl.offsetLeft}px`;
+          previewEl.style.width = `${width}px`;
+          previewEl.style.pointerEvents = "none";
+          previewEl.style.zIndex = "3";
+
+          if (state.currentView === "month") {
+            const targetDate = new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + dir, 1);
+            populateCalendarMonthGrid(previewEl, targetDate, true);
+          } else {
+            const targetDate = new Date(state.activeDate);
+            targetDate.setDate(targetDate.getDate() + dir * 7);
+            populateWeekGrid(previewEl, targetDate);
+          }
+          previewDir = dir;
+          const maxH = Math.max(gridEl.offsetHeight, previewEl.offsetHeight);
+          hostEl.style.minHeight = `${gridEl.offsetTop + maxH}px`;
+        }
+
+        gridEl.classList.remove("swipe-next", "swipe-prev");
+        gridEl.style.transition = "none";
+        gridEl.style.willChange = "transform";
+        gridEl.style.transform = `translate3d(${dx}px, 0, 0)`;
+
+        if (previewEl && previewDir !== 0) {
+          previewEl.style.transition = "none";
+          previewEl.style.willChange = "transform";
+          previewEl.style.transform = `translate3d(${dx + previewDir * stride}px, 0, 0)`;
+        }
+      }
+
+      function endDrag() {
+        if (!isTracking) return;
+        isTracking = false;
+
+        if (isHorizontal !== true) {
+          isHorizontal = null;
+          cleanupSwipeElements();
+          return;
+        }
+        isHorizontal = null;
+
+        const dx = lastX - startX;
+        const gridEl = getActiveGridEl();
+        const hostEl = gridEl?.parentElement;
+        if (!gridEl || !hostEl || Math.abs(dx) < 2) {
+          cleanupSwipeElements();
+          return;
+        }
+
+        const now = performance.now();
+        const lastSample = samples[samples.length - 1] || { x: lastX, t: now };
+        const firstSample = samples[0] || { x: startX, t: now };
+        let vx = 0; // px per ms
+        if (now - lastSample.t < 90 && lastSample.t > firstSample.t) {
+          vx = (lastSample.x - firstSample.x) / (lastSample.t - firstSample.t);
+        }
+
+        const width = gridEl.offsetWidth || hostEl.clientWidth || 360;
+        const gap = state.currentView === "week" ? 14 : 1;
+        const stride = width + gap;
+        const dir = dx < 0 ? 1 : -1;
+        const vInDir = dir === 1 ? -vx : vx;
+
+        const shouldCommit =
+          (Math.abs(dx) > width * 0.22 && vInDir > -0.15) ||
+          (Math.abs(dx) > 20 && vInDir >= 0.30);
+
+        state.didJustSwipe = true;
+        setTimeout(() => { state.didJustSwipe = false; }, 220);
+
+        if (shouldCommit) {
+          playPop();
+          const remaining = Math.max(0, stride - Math.abs(dx));
+          const speed = Math.max(0.85, Math.min(3.8, vInDir * 1.1));
+          const durationMs = Math.round(Math.max(60, Math.min(320, remaining / speed)));
+          const easing = "cubic-bezier(0.12, 0.8, 0.32, 1)";
+
+          gridEl.style.transition = `transform ${durationMs}ms ${easing}`;
+          gridEl.style.transform = `translate3d(${-dir * stride}px, 0, 0)`;
+          if (previewEl) {
+            previewEl.style.transition = `transform ${durationMs}ms ${easing}`;
+            previewEl.style.transform = "translate3d(0px, 0, 0)";
+          }
+
+          // Update period title immediately with matching direction animation
+          const animClass = dir > 0 ? "swipe-next" : "swipe-prev";
+          const nextDate = state.currentView === "month"
+            ? new Date(state.activeDate.getFullYear(), state.activeDate.getMonth() + dir, 1)
+            : new Date(state.activeDate.getFullYear(), state.activeDate.getMonth(), state.activeDate.getDate() + dir * 7);
+          const periodTitle = document.getElementById("current-period-title");
+          if (periodTitle) {
+            periodTitle.textContent = formatPeriodTitle(nextDate, state.currentView);
+            triggerSlideAnimation(periodTitle, animClass);
+          }
+          if (state.currentView === "month") {
+            const dayPanel = document.getElementById("selected-day-panel");
+            triggerSlideAnimation(dayPanel, animClass);
+          }
+
+          pendingCommitDir = dir;
+          animTimer = setTimeout(() => {
+            finishPendingAnimationImmediately();
+          }, durationMs);
+        } else {
+          const returnDist = Math.abs(dx);
+          const returnSpeed = Math.max(0.9, Math.min(3.0, Math.abs(vx)));
+          const durationMs = Math.round(Math.max(70, Math.min(240, returnDist / returnSpeed)));
+          const easing = "cubic-bezier(0.16, 1, 0.3, 1)";
+
+          gridEl.style.transition = `transform ${durationMs}ms ${easing}`;
+          gridEl.style.transform = "translate3d(0px, 0, 0)";
+          if (previewEl && previewDir !== 0) {
+            previewEl.style.transition = `transform ${durationMs}ms ${easing}`;
+            previewEl.style.transform = `translate3d(${previewDir * stride}px, 0, 0)`;
+          }
+
+          pendingCommitDir = 0;
+          animTimer = setTimeout(() => {
+            finishPendingAnimationImmediately();
+          }, durationMs);
         }
       }
 
       containerEl.addEventListener("touchstart", (e) => {
         if (!e.touches || e.touches.length !== 1) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        lastX = startX;
-        lastY = startY;
-        startTime = Date.now();
-        isTracking = true;
-        isHorizontal = null;
+        startDrag(e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: true });
 
       containerEl.addEventListener("touchmove", (e) => {
         if (!isTracking || !e.touches || e.touches.length !== 1) return;
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-        const dx = lastX - startX;
-        const dy = lastY - startY;
-
-        if (isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-          // On desktop week view (>768px) if horizontally scrollable, don't hijack native scroll
-          if (state.currentView === "week" && window.innerWidth > 768 && containerEl.scrollWidth > containerEl.clientWidth) {
-            isHorizontal = false;
-          } else {
-            isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.1;
-          }
-        }
-
-        if (isHorizontal === true) {
-          if (e.cancelable) e.preventDefault();
-          const gridEl = getActiveGridEl();
-          if (gridEl) {
-            gridEl.style.transition = "none";
-            gridEl.style.transform = `translateX(${Math.max(-60, Math.min(60, dx * 0.35))}px)`;
-          }
-        }
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
       }, { passive: false });
 
-      function finishTouchSwipe() {
-        if (!isTracking) return;
-        isTracking = false;
-        resetDragPreview();
-        const dx = lastX - startX;
-        const dy = lastY - startY;
-        const elapsed = Date.now() - startTime;
+      containerEl.addEventListener("touchend", endDrag, { passive: true });
+      containerEl.addEventListener("touchcancel", endDrag, { passive: true });
 
-        if (isHorizontal === true && Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(dy) && elapsed < 1000) {
-          state.didJustSwipe = true;
-          setTimeout(() => { state.didJustSwipe = false; }, 220);
-          stepPeriod(dx < 0 ? 1 : -1);
-        }
-        isHorizontal = null;
-      }
-
-      containerEl.addEventListener("touchend", finishTouchSwipe, { passive: true });
-      containerEl.addEventListener("touchcancel", finishTouchSwipe, { passive: true });
-
-      // Pointer drag fallback for desktop mobile-emulator / mouse swipe testing
+      // Mouse drag fallback for desktop / emulator testing
       let mouseDown = false;
-      let mouseStartX = 0;
-      let mouseStartY = 0;
-
       containerEl.addEventListener("mousedown", (e) => {
         if (e.button !== 0) return;
+        if (e.target.closest("button, a, input, select, textarea")) return;
         mouseDown = true;
-        mouseStartX = e.clientX;
-        mouseStartY = e.clientY;
+        startDrag(e.clientX, e.clientY);
       });
 
-      window.addEventListener("mouseup", (e) => {
+      window.addEventListener("mousemove", (e) => {
+        if (!mouseDown) return;
+        moveDrag(e.clientX, e.clientY, e);
+      });
+
+      window.addEventListener("mouseup", () => {
         if (!mouseDown) return;
         mouseDown = false;
-        const dx = e.clientX - mouseStartX;
-        const dy = e.clientY - mouseStartY;
-        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-          state.didJustSwipe = true;
-          setTimeout(() => { state.didJustSwipe = false; }, 220);
-          stepPeriod(dx < 0 ? 1 : -1);
-        }
+        endDrag();
       });
     }
 

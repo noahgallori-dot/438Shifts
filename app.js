@@ -379,6 +379,12 @@
     return true;
   }
 
+  function canViewCoworkerNames() {
+    if (state.isAdmin) return true;
+    if (!isUserLoggedIn()) return false;
+    return isApprovedProfile();
+  }
+
   function escapeHtml(str) {
     if (str === null || str === undefined) return "";
     return String(str)
@@ -1038,6 +1044,9 @@
   function showToast(message, type = "default") {
     const container = document.getElementById("toast-container");
     if (!container) return;
+    // Minimize screen clutter: clear any previous lingering toast
+    container.querySelectorAll(".toast").forEach(t => t.remove());
+
     const toast = document.createElement("div");
     toast.className = `toast ${type === "success" ? "toast-success" : type === "error" ? "toast-error" : ""}`;
     toast.title = "Click or swipe to dismiss";
@@ -1063,7 +1072,7 @@
       setTimeout(() => toast.remove(), 220);
     }
 
-    autoTimer = setTimeout(() => dismissToast(), 4000);
+    autoTimer = setTimeout(() => dismissToast(), 2400);
 
     // Click or swipe to dismiss
     let startX = 0;
@@ -1416,7 +1425,6 @@
   }
 
   function getFilteredShifts() {
-    if (!isUserLoggedIn()) return [];
     return state.shifts.filter(shift => {
       if (shift.status === "claimed") return false;
       if (state.filterMineOnly) {
@@ -1500,9 +1508,7 @@
   function updateCountsAndTitle() {
     const countEl = document.getElementById("open-shifts-count");
     if (countEl) {
-      countEl.textContent = isUserLoggedIn()
-        ? state.shifts.filter(s => s.status !== "claimed").length
-        : "—";
+      countEl.textContent = state.shifts.filter(s => s.status !== "claimed").length;
     }
 
     const periodTitle = document.getElementById("current-period-title");
@@ -1588,13 +1594,19 @@
   function updateLockedOverlay() {
     const overlay = document.getElementById("shifts-locked-overlay");
     const loggedIn = isUserLoggedIn();
+    const canView = canViewCoworkerNames();
     if (loggedIn) {
       document.documentElement.classList.add("user-logged-in");
     } else {
       document.documentElement.classList.remove("user-logged-in");
     }
+    if (canView) {
+      document.documentElement.classList.add("user-approved");
+    } else {
+      document.documentElement.classList.remove("user-approved");
+    }
     if (overlay) {
-      overlay.style.display = loggedIn ? "none" : "flex";
+      overlay.style.display = "none";
     }
   }
 
@@ -1664,15 +1676,26 @@
       const offerAmount = Number(shift.offerAmount) || 0;
       const chip = document.createElement("div");
       chip.className = "mini-shift-chip";
-      chip.title = `${shift.authorName} (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""}`;
+      const canView = canViewCoworkerNames();
+
+      chip.title = canView
+        ? `${shift.authorName} (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""}`
+        : (isUserLoggedIn()
+            ? `Shift (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""} • Pending manager approval`
+            : `Shift (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""} • Log in to contact`);
 
       const timeSpan = document.createElement("span");
       timeSpan.className = "mini-shift-time";
       timeSpan.textContent = formatTime12h(shift.startTime).replace(":00", "");
 
       const nameSpan = document.createElement("span");
-      nameSpan.className = "mini-shift-name";
-      nameSpan.textContent = `${shift.authorName.split(" ")[0]} (Level ${shift.authorLevel})`;
+      nameSpan.className = canView ? "mini-shift-name" : "mini-shift-name is-blurred-name";
+      if (canView) {
+        nameSpan.textContent = `${shift.authorName.split(" ")[0]} (Level ${shift.authorLevel})`;
+      } else {
+        const firstName = (shift.authorName || "Associate").split(" ")[0];
+        nameSpan.innerHTML = `<span class="blurred-name-text" aria-hidden="true" draggable="false">${escapeHtml(firstName)}</span> (Level ${shift.authorLevel})`;
+      }
 
       chip.appendChild(timeSpan);
       chip.appendChild(nameSpan);
@@ -1682,6 +1705,12 @@
         offerSpan.className = "mini-shift-offer";
         offerSpan.textContent = `$${offerAmount}`;
         chip.appendChild(offerSpan);
+      }
+
+      if (!canView) {
+        chip.addEventListener("copy", (e) => {
+          e.preventDefault();
+        });
       }
 
       chip.addEventListener("click", (e) => {
@@ -1734,24 +1763,6 @@
     if (title) title.textContent = formatDateHuman(dateKey);
 
     list.innerHTML = "";
-
-    if (!isUserLoggedIn()) {
-      list.innerHTML = `
-        <div class="empty-day-state">
-          <div class="empty-day-icon">🔒</div>
-          <div class="empty-day-title">Login Required to View Shifts</div>
-          <p class="empty-day-desc">Coworker shift postings are private. Please log in or request to join Store #438 to view active shifts.</p>
-          <button type="button" class="btn-primary-action" id="btn-panel-day-login" style="margin-top: 0.75rem;">
-            <span>Log In to View</span>
-          </button>
-        </div>
-      `;
-      document.getElementById("btn-panel-day-login")?.addEventListener("click", () => {
-        playPop();
-        openLoginModal();
-      });
-      return;
-    }
 
     const shiftsOnDay = getFilteredShifts().filter(s => s.date === dateKey);
 
@@ -1848,12 +1859,32 @@
     card.className = "shift-card";
     card.dataset.shiftId = shift.id;
 
+    const canView = canViewCoworkerNames();
+    if (!canView) {
+      card.classList.add("is-logged-out-card");
+      card.addEventListener("copy", (e) => {
+        e.preventDefault();
+      });
+    }
+
     const duration = calculateDurationHours(shift.startTime, shift.endTime);
-    const avatarMarkup = renderAvatarMarkup(resolveShiftAvatar(shift), shift.authorName);
+    const avatarMarkup = renderAvatarMarkup(resolveShiftAvatar(shift), canView ? shift.authorName : "Associate");
 
     const badgeLabel = `Level ${shift.authorLevel}`;
     const isMine = isShiftOwner(shift);
     const offerAmount = Number(shift.offerAmount) || 0;
+
+    const authorNameHtml = canView
+      ? escapeHtml(shift.authorName)
+      : `<span class="blurred-name-text" aria-hidden="true" draggable="false">${escapeHtml(shift.authorName)}</span>`;
+
+    const cardTitle = canView
+      ? `title="${escapeHtml(shift.authorName)}"`
+      : (isUserLoggedIn() ? `title="Account pending manager approval"` : `title="Log in to contact"`);
+
+    const actionText = canView
+      ? "Details →"
+      : (isUserLoggedIn() ? "Pending Approval →" : "Log in to contact →");
 
     card.innerHTML = `
       <div class="shift-card-top">
@@ -1862,7 +1893,9 @@
             ${avatarMarkup}
           </div>
           <div class="shift-author-details">
-            <div class="shift-author-name" title="${shift.authorName}">${shift.authorName}</div>
+            <div class="shift-author-name ${canView ? "" : "shift-name-blurred"}" ${cardTitle}>
+              ${authorNameHtml}
+            </div>
           </div>
         </div>
         <div class="shift-card-badges">
@@ -1880,7 +1913,7 @@
         <div class="shift-duration-pill">${duration} hrs</div>
       </div>
 
-      ${shift.notes ? `<p class="shift-card-note">“${shift.notes}”</p>` : ""}
+      ${shift.notes ? `<p class="shift-card-note">“${escapeHtml(shift.notes)}”</p>` : ""}
 
       <div class="shift-card-footer">
         <div class="shift-status-indicator">
@@ -1890,7 +1923,7 @@
         <div style="display:flex; align-items:center; gap:0.4rem;">
           ${(isMine || state.isAdmin) ? `<button type="button" class="btn-card-edit" title="Edit shift details"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>` : ""}
           ${state.isAdmin ? `<button type="button" class="btn-card-delete" title="Manager: Delete this shift"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg> Delete</button>` : ""}
-          <span class="btn-card-action">Details →</span>
+          <span class="btn-card-action">${actionText}</span>
         </div>
       </div>
     `;
@@ -1929,8 +1962,11 @@
   // ==========================================================================
   function openShiftDetailsModal(shiftId) {
     if (!isUserLoggedIn()) {
-      showToast("Please log in to view coworker shift details!", "error");
-      openLoginModal();
+      openLoginModal("Log in to contact");
+      return;
+    }
+    if (!canViewCoworkerNames()) {
+      openModal(document.getElementById("modal-request-submitted"));
       return;
     }
     const shift = state.shifts.find(s => s.id === shiftId);
@@ -3133,7 +3169,7 @@
     openModal(modal);
   }
 
-  function openLoginModal() {
+  function openLoginModal(customNotice = null) {
     const modal = document.getElementById("modal-login");
     const emailInput = document.getElementById("login-email");
     const passInput = document.getElementById("login-password");
@@ -3141,6 +3177,19 @@
     if (state.userProfile && state.userProfile.email && emailInput && !emailInput.value) {
       emailInput.value = state.userProfile.email;
     }
+
+    const noticeEl = document.getElementById("login-modal-info-notice");
+    const noticeTextEl = document.getElementById("login-modal-notice-text");
+    const subEl = document.getElementById("login-modal-sub");
+    if (customNotice) {
+      if (noticeEl) noticeEl.style.display = "flex";
+      if (noticeTextEl) noticeTextEl.textContent = customNotice;
+      if (subEl) subEl.textContent = "Please log in with your associate account to contact coworkers and claim or swap shifts.";
+    } else {
+      if (noticeEl) noticeEl.style.display = "none";
+      if (subEl) subEl.textContent = "Log in with your email and password to view shifts and swap with coworkers.";
+    }
+
     openModal(modal);
   }
 
@@ -3737,7 +3786,6 @@
       updateAdminHeaderDisplay();
       closeModal(document.getElementById("modal-manager-hub"));
       playPop();
-      showToast("Logged out of Manager Mode", "default");
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
     });
 
@@ -4754,7 +4802,6 @@
       closeModal(document.getElementById("modal-login"));
       if (passInput) passInput.value = "";
       playSuccess();
-      showToast(`Welcome back, ${match.name}! Shifts unlocked.`, "success");
       updateUserHeaderDisplay();
       updateProfileWarningBanner();
       updateCountsAndTitle();
@@ -4943,7 +4990,6 @@
       playPop();
       closeModal(document.getElementById("modal-user-menu"));
       logoutUser();
-      showToast("Logged out of Store #438 shift board.", "default");
     });
 
     // Sub-modal Back Buttons (Return to User Account Menu or Login Modal)
@@ -5275,6 +5321,26 @@
       updateProfileWarningBanner();
       updateCountsAndTitle();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+    });
+
+    // Ensure blurred coworker names cannot be copied when not approved
+    document.addEventListener("copy", (e) => {
+      if (!canViewCoworkerNames()) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const container = document.createElement("div");
+          for (let i = 0; i < selection.rangeCount; i++) {
+            container.appendChild(selection.getRangeAt(i).cloneContents());
+          }
+          if (container.querySelector(".blurred-name-text, .shift-name-blurred")) {
+            container.querySelectorAll(".blurred-name-text, .shift-name-blurred").forEach(el => el.remove());
+            if (e.clipboardData) {
+              e.clipboardData.setData("text/plain", container.innerText || "");
+              e.preventDefault();
+            }
+          }
+        }
+      }
     });
   }
 

@@ -13,46 +13,6 @@
   const SUPABASE_REST_URL = "https://pxykvlbsnccjaghskqco.supabase.co/rest/v1";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_uawLm9qXPG11rBCyJ8Xmhg_NvIwL1ar";
 
-  const SUPABASE_SQL_SETUP_SCRIPT = `-- Run this in Supabase SQL Editor (https://supabase.com/dashboard/project/pxykvlbsnccjaghskqco/sql)
-CREATE TABLE IF NOT EXISTS public.shifts (
-  id TEXT PRIMARY KEY,
-  date TEXT NOT NULL,
-  start_time TEXT NOT NULL,
-  end_time TEXT NOT NULL,
-  notes TEXT DEFAULT '',
-  status TEXT DEFAULT 'open',
-  author_id TEXT NOT NULL,
-  author_name TEXT NOT NULL,
-  author_email TEXT DEFAULT '',
-  author_phone TEXT NOT NULL,
-  author_level INTEGER NOT NULL DEFAULT 1,
-  author_avatar TEXT DEFAULT '👨‍🍳',
-  author_avatar_bg TEXT DEFAULT '#FFE8E6',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.associates (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  level INTEGER NOT NULL DEFAULT 1,
-  avatar TEXT DEFAULT '👨‍🍳',
-  avatar_bg TEXT DEFAULT '#FFE8E6',
-  email_verified BOOLEAN DEFAULT TRUE,
-  joined_at TIMESTAMPTZ DEFAULT NOW(),
-  device JSONB DEFAULT '{}'::jsonb
-);
-
-ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.associates ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Public shifts access" ON public.shifts;
-CREATE POLICY "Public shifts access" ON public.shifts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Public associates access" ON public.associates;
-CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);`;
-
   let supabaseClient = null;
   try {
     if (window.supabase && typeof window.supabase.createClient === "function") {
@@ -105,8 +65,13 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     "🌴": `<svg viewBox="0 0 36 36" width="72%" height="72%" fill="none"><path d="M16.5 31C16.5 23.5 18 18 20.5 13.5" stroke="#B45309" stroke-width="3.2" stroke-linecap="round"/><path d="M20.5 13.5C15 10.5 8.5 12 5 16.5C10 15.5 15.5 15.5 20.5 13.5Z" fill="#22C55E"/><path d="M20.5 13.5C14 7.5 14.5 3 19.5 1.5C18.5 6 19 9.5 20.5 13.5Z" fill="#16A34A"/><path d="M20.5 13.5C24.5 7 30.5 6.5 34 10.5C29 10.5 24.5 11.5 20.5 13.5Z" fill="#22C55E"/><path d="M20.5 13.5C26.5 13 31.5 16.5 32.5 21.5C28.5 18.5 24.5 15.5 20.5 13.5Z" fill="#15803D"/><path d="M20.5 13.5C13.5 15 9.5 19.5 9.5 24C13 20 16.5 16.5 20.5 13.5Z" fill="#15803D"/></svg>`,
     "🍟": `<svg viewBox="0 0 36 36" width="72%" height="72%" fill="none"><rect x="10" y="6" width="3.5" height="14" rx="1.2" fill="#FACC15" stroke="#EAB308" stroke-width="0.8"/><rect x="14.2" y="4" width="3.5" height="16" rx="1.2" fill="#FDE047" stroke="#EAB308" stroke-width="0.8"/><rect x="18.4" y="5.5" width="3.5" height="14.5" rx="1.2" fill="#FACC15" stroke="#EAB308" stroke-width="0.8"/><rect x="22.5" y="7" width="3.5" height="13" rx="1.2" fill="#FDE047" stroke="#EAB308" stroke-width="0.8"/><path d="M8 15H28L25.5 30C25.3 31.1 24.3 32 23.2 32H12.8C11.7 32 10.7 31.1 10.5 30L8 15Z" fill="#C81912"/><path d="M12.5 19.5C14.5 21.5 21.5 21.5 23.5 19.5" stroke="#FFB81C" stroke-width="2.2" stroke-linecap="round"/></svg>`,
     "🥤": `<svg viewBox="0 0 36 36" width="72%" height="72%" fill="none"><path d="M21 3L17.5 11" stroke="#C81912" stroke-width="2.6" stroke-linecap="round"/><path d="M9.5 12H26.5L24.2 30.2C24 31.3 23.1 32 22 32H14C12.9 32 12 31.3 11.8 30.2L9.5 12Z" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.8"/><path d="M10.5 18H25.5L24.8 24H11.2L10.5 18Z" fill="#C81912"/><path d="M8 12C8 10.6 9.1 9.5 10.5 9.5H25.5C26.9 9.5 28 10.6 28 12H8Z" fill="#E2E8F0"/></svg>`,
-    "👤": `<svg viewBox="0 0 24 24" width="62%" height="62%" fill="none" stroke="#B45309" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`
+    "👤": `<svg viewBox="0 0 24 24" width="62%" height="62%" fill="none" stroke="#B45309" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`,
+    "👑": `<svg viewBox="0 0 24 24" width="62%" height="62%" fill="#FFB81C" stroke="#B45309" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5v-2z"></path></svg>`
   };
+
+  // Modern Vector SVG Icons for Password Visibility Toggle
+  const SVG_EYE_SHOW = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  const SVG_EYE_HIDE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
   function renderAvatarMarkup(avatar, altText = "Avatar") {
     if (!avatar) return VECTOR_AVATARS["👨‍🍳"];
@@ -120,7 +85,6 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   const STORAGE_KEY_USER = "crew_user_profile_438";
   const STORAGE_KEY_SHIFTS_LEGACY = "crew_shifts_data_438";
   const STORAGE_KEY_SHIFTS = "crew_shifts_cloud_v2_438";
-  const STORAGE_KEY_DELETED_SHIFTS = "crew_deleted_shifts_438";
   const STORAGE_KEY_ADMIN = "crew_is_admin_438";
   const STORAGE_KEY_ADMIN_HUB_OPEN = "crew_admin_hub_open_438";
   const STORAGE_KEY_ROSTER = "crew_associates_roster_438";
@@ -385,6 +349,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     pendingVerification: null,
     isEmailVerified: false,
     verifiedEmail: "",
+    profileOriginalEmail: "",
+    profileInitialState: null,
     supabaseConnected: false,
     hasLoadedCloudAssociates: false
   };
@@ -1269,11 +1235,23 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
   }
 
   function logoutUser() {
+    if (state.userProfile && state.userProfile.email) {
+      const curEmail = state.userProfile.email.toLowerCase();
+      const assoc = state.associates.find(a => a.email && a.email.toLowerCase() === curEmail);
+      if (assoc) {
+        assoc.isLoggedIn = false;
+        if (!assoc.device) assoc.device = {};
+        assoc.device.isLoggedIn = false;
+        saveAssociatesRoster(state.associates);
+        upsertAssociateToSupabase(assoc);
+      }
+    }
     state.userProfile = null;
     state.isEmailVerified = false;
     state.verifiedEmail = "";
     state.pendingVerification = null;
     state.isAdmin = false;
+    document.documentElement.classList.remove("user-logged-in");
     try {
       localStorage.removeItem(STORAGE_KEY_USER);
       localStorage.removeItem(STORAGE_KEY_ADMIN);
@@ -1609,8 +1587,14 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
   function updateLockedOverlay() {
     const overlay = document.getElementById("shifts-locked-overlay");
+    const loggedIn = isUserLoggedIn();
+    if (loggedIn) {
+      document.documentElement.classList.add("user-logged-in");
+    } else {
+      document.documentElement.classList.remove("user-logged-in");
+    }
     if (overlay) {
-      overlay.style.display = isUserLoggedIn() ? "none" : "flex";
+      overlay.style.display = loggedIn ? "none" : "flex";
     }
   }
 
@@ -2173,6 +2157,89 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     };
   }
 
+  function updateProfileSendCodeButtonState() {
+    const btnSendCode = document.getElementById("btn-send-code");
+    const emailInput = document.getElementById("profile-email");
+    if (!btnSendCode || !emailInput) return;
+    const cur = (emailInput.value || "").trim().toLowerCase();
+    const original = (state.profileOriginalEmail || "").trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Send code button is enabled ONLY if user has edited their email and it's a valid email format
+    const isEdited = cur !== "" && cur !== original && emailRegex.test(cur);
+    btnSendCode.disabled = !isEdited;
+    btnSendCode.classList.toggle("is-disabled", !isEdited);
+  }
+
+  function triggerAttentionAnimation(el) {
+    if (!el) return;
+    el.classList.remove("attention-highlight");
+    void el.offsetWidth;
+    el.classList.add("attention-highlight");
+    setTimeout(() => {
+      el.classList.remove("attention-highlight");
+    }, 2400);
+  }
+
+  function bringAttentionToSendCode() {
+    const btnSendCode = document.getElementById("btn-send-code");
+    const codeGroup = document.getElementById("verification-code-group");
+    const codeInput = document.getElementById("profile-code-input");
+    const emailInput = document.getElementById("profile-email");
+
+    // If code group is currently active (code was already sent), highlight code input & verify button
+    if (codeGroup && codeGroup.style.display !== "none") {
+      codeInput?.focus();
+      triggerAttentionAnimation(codeInput);
+      const btnVerify = document.getElementById("btn-verify-code");
+      if (btnVerify) triggerAttentionAnimation(btnVerify);
+      return;
+    }
+
+    // If email is empty, focus email input
+    if (!emailInput?.value.trim()) {
+      emailInput?.focus();
+      triggerAttentionAnimation(emailInput);
+      return;
+    }
+
+    // Highlight and focus the "Send 6-Digit Code" button
+    if (btnSendCode) {
+      btnSendCode.disabled = false;
+      btnSendCode.classList.remove("is-disabled");
+      btnSendCode.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      triggerAttentionAnimation(btnSendCode);
+      btnSendCode.focus();
+    }
+  }
+
+  function hasProfileChanged() {
+    const curFirst = (document.getElementById("profile-first-name")?.value || "").trim();
+    const curLast = (document.getElementById("profile-last-name")?.value || "").trim();
+    const curEmail = (document.getElementById("profile-email")?.value || "").trim().toLowerCase();
+    const curPhone = cleanPhoneDigits(document.getElementById("profile-phone")?.value || "");
+    const curLevel = parseInt(document.getElementById("profile-level")?.value, 10) || 1;
+    const curPreset = state.selectedAvatarPreset;
+    const curUploaded = state.uploadedAvatarDataUrl;
+
+    if (!state.userProfile) {
+      return !!(curFirst || curLast || curEmail || curPhone);
+    }
+
+    const init = state.profileInitialState;
+    if (!init) return false;
+
+    if (curFirst !== init.firstName) return true;
+    if (curLast !== init.lastName) return true;
+    if (curEmail !== init.email) return true;
+    if (curPhone !== init.phone) return true;
+    if (curLevel !== init.level) return true;
+    if (curUploaded !== init.uploadedAvatar) return true;
+    if (curPreset !== init.presetId) return true;
+
+    return false;
+  }
+
   function updateSaveProfileButtonState() {
     const btnSave = document.getElementById("btn-save-profile");
     const btnText = document.getElementById("btn-save-profile-text");
@@ -2186,9 +2253,22 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       state.verifiedEmail.toLowerCase() === curEmail
     );
 
+    const changed = hasProfileChanged();
+
     if (btnSave) {
-      btnSave.disabled = !isVerified;
-      btnSave.classList.toggle("is-disabled", !isVerified);
+      btnSave.disabled = false;
+      // The save profile button needs to be red if a change was made (assuming email is verified)
+      if (changed && isVerified) {
+        btnSave.classList.add("has-changes");
+        btnSave.classList.remove("no-changes", "unverified");
+      } else if (!isVerified) {
+        btnSave.classList.add("unverified");
+        btnSave.classList.remove("has-changes", "no-changes");
+      } else {
+        // Verified, but no change made yet
+        btnSave.classList.add("no-changes");
+        btnSave.classList.remove("has-changes", "unverified");
+      }
     }
 
     if (btnText) {
@@ -2330,6 +2410,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
       updateProfileAvatarPreview(state.userProfile.avatar);
 
+      state.profileOriginalEmail = (state.userProfile.email || "").trim().toLowerCase();
+      state.profileInitialState = {
+        firstName: fName,
+        lastName: lName,
+        email: (state.userProfile.email || "").trim().toLowerCase(),
+        phone: cleanPhoneDigits(state.userProfile.phone || ""),
+        level: state.userProfile.level || 1,
+        presetId: state.selectedAvatarPreset,
+        uploadedAvatar: state.uploadedAvatarDataUrl
+      };
       if (state.userProfile.email) {
         state.isEmailVerified = true;
         state.verifiedEmail = state.userProfile.email;
@@ -2342,6 +2432,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         if (verifiedChip) verifiedChip.style.display = "none";
       }
     } else {
+      state.profileOriginalEmail = "";
+      state.profileInitialState = {
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        level: 1,
+        presetId: "avatar-1",
+        uploadedAvatar: null
+      };
       if (firstNameInput) firstNameInput.value = "";
       if (lastNameInput) lastNameInput.value = "";
       if (emailInput) emailInput.value = "";
@@ -2355,6 +2455,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       updateProfileAvatarPreview("👨‍🍳");
     }
 
+    updateProfileSendCodeButtonState();
     updateSaveProfileButtonState();
     renderAvatarPresets();
     openModal(modal);
@@ -2391,6 +2492,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         btn.classList.add("selected");
         updateProfileAvatarPreview(preset.emoji);
         autoSaveProfileIfVerified(false);
+        updateSaveProfileButtonState();
       });
 
       container.appendChild(btn);
@@ -2618,7 +2720,15 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     const passwordInput = document.getElementById("edit-assoc-password");
     if (passwordInput) passwordInput.value = assoc.password || "";
     if (levelSelect) levelSelect.value = String(assoc.level || 1);
-    if (statusSelect) statusSelect.value = assoc.approved === false ? "pending" : "approved";
+    if (statusSelect) {
+      if (assoc.approved === false) {
+        statusSelect.value = "pending";
+      } else if (assoc.isLoggedIn === false || (assoc.device && assoc.device.isLoggedIn === false)) {
+        statusSelect.value = "logged_out";
+      } else {
+        statusSelect.value = "approved";
+      }
+    }
 
     openModal(modal);
   }
@@ -2668,6 +2778,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const dev = assoc.device || { summary: "Desktop Web", screen: "1920 × 1080", isMobile: false, type: "Desktop" };
       const isMobile = dev.isMobile;
       const isApproved = assoc.approved !== false;
+      const isLoggedOut = isApproved && (assoc.isLoggedIn === false || (assoc.device && assoc.device.isLoggedIn === false));
+      const statusMarkup = !isApproved
+        ? `<span class="sheet-pending-pill">⏳ Pending</span>`
+        : (isLoggedOut
+            ? `<span class="sheet-logged-out-pill">🚪 Logged Out</span>`
+            : `<span class="sheet-approved-pill">✓ Approved</span>`);
 
       tr.innerHTML = `
         <td class="col-num">${idx + 1}</td>
@@ -2680,10 +2796,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           </div>
         </td>
         <td>
-          ${isApproved
-            ? `<span class="sheet-approved-pill">✓ Approved</span>`
-            : `<span class="sheet-pending-pill">⏳ Pending</span>`
-          }
+          ${statusMarkup}
         </td>
         <td>
           <span class="level-badge l${assoc.level}">Level ${assoc.level}</span>
@@ -2770,12 +2883,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
   // Export to CSV for Google Sheets
   function exportRosterToCSV() {
-    const headers = ["Index", "Name", "Level", "Email", "Phone", "Password", "Joined Date", "Device Summary", "Screen Size", "Device Type"];
+    const headers = ["Index", "Name", "Status", "Level", "Email", "Phone", "Password", "Joined Date", "Device Summary", "Screen Size", "Device Type"];
     const rows = state.associates.map((a, idx) => {
       const dev = a.device || {};
+      const isApproved = a.approved !== false;
+      const isLoggedOut = isApproved && (a.isLoggedIn === false || (dev && dev.isLoggedIn === false));
+      const statusStr = !isApproved ? "Pending" : (isLoggedOut ? "Logged Out" : "Approved");
       return [
         idx + 1,
         `"${(a.name || '').replace(/"/g, '""')}"`,
+        `"${statusStr}"`,
         a.level,
         `"${a.email || ''}"`,
         `"${a.phone || ''}"`,
@@ -2802,12 +2919,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
   // Copy TSV format to clipboard
   function copyRosterForGoogleSheets() {
-    const headers = ["#", "Name", "Level", "Email", "Phone", "Password", "Joined Date", "Device", "Screen", "Type"];
+    const headers = ["#", "Name", "Status", "Level", "Email", "Phone", "Password", "Joined Date", "Device", "Screen", "Type"];
     const rows = state.associates.map((a, idx) => {
       const dev = a.device || {};
+      const isApproved = a.approved !== false;
+      const isLoggedOut = isApproved && (a.isLoggedIn === false || (dev && dev.isLoggedIn === false));
+      const statusStr = !isApproved ? "Pending" : (isLoggedOut ? "Logged Out" : "Approved");
       return [
         idx + 1,
         a.name,
+        statusStr,
         `Level ${a.level}`,
         a.email,
         a.phone,
@@ -2828,8 +2949,20 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     });
   }
 
+  function resetPasswordToggles(modalEl) {
+    if (!modalEl) return;
+    modalEl.querySelectorAll(".btn-toggle-pwd").forEach(btn => {
+      const targetId = btn.getAttribute("data-target");
+      const targetInput = document.getElementById(targetId);
+      if (targetInput) targetInput.type = "password";
+      btn.innerHTML = SVG_EYE_SHOW;
+      btn.setAttribute("aria-label", "Show password");
+    });
+  }
+
   function openModal(modalEl) {
     if (!modalEl) return;
+    resetPasswordToggles(modalEl);
     modalEl.classList.add("active");
     modalEl.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
@@ -3673,6 +3806,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       const newLevel = parseInt(document.getElementById("edit-assoc-level")?.value, 10) || 1;
       const newStatus = document.getElementById("edit-assoc-status")?.value;
       const isApproved = newStatus !== "pending";
+      const isLoggedIn = newStatus === "approved";
 
       if (!assocId || !newFirst || !newLast || !newEmail || !newPhone) {
         showToast("All associate fields are required!", "error");
@@ -3694,10 +3828,12 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         phone: newPhone,
         level: newLevel,
         approved: isApproved,
+        isLoggedIn: isLoggedIn,
         password: finalPass,
         device: {
           ...(state.associates[idx].device || detectDeviceDetails()),
           approved: isApproved,
+          isLoggedIn: isLoggedIn,
           firstName: newFirst,
           lastName: newLast,
           password: finalPass
@@ -3735,6 +3871,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
           phone: newPhone,
           level: newLevel,
           approved: isApproved,
+          isLoggedIn: isLoggedIn,
           password: finalPass
         };
         try {
@@ -4047,6 +4184,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
 
       autoSaveProfileIfVerified(false);
+      updateSaveProfileButtonState();
       closeCropModal();
       playSuccess();
       showToast("Photo cropped & ready!", "success");
@@ -4105,8 +4243,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         }
       } finally {
         if (btnSendCode) {
-          btnSendCode.disabled = false;
           btnSendCode.innerHTML = `<span>Send 6-Digit Code</span>`;
+          updateProfileSendCodeButtonState();
         }
       }
     }
@@ -4133,6 +4271,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       if (entered === state.pendingVerification.code) {
         state.isEmailVerified = true;
         state.verifiedEmail = state.pendingVerification.email;
+        state.profileOriginalEmail = state.verifiedEmail.toLowerCase();
+        updateProfileSendCodeButtonState();
         playSuccess();
 
         // Check if this email already exists in the Supabase roster to remember their info across devices!
@@ -4191,6 +4331,7 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         if (verifiedChip) verifiedChip.style.display = "none";
       }
       updateSaveProfileButtonState();
+      updateProfileSendCodeButtonState();
     });
 
     // Live phone number formatting as user types: (XXX) XXX-XXXX
@@ -4201,17 +4342,21 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         e.target.value = formatted;
       }
       autoSaveProfileIfVerified(false);
+      updateSaveProfileButtonState();
     });
 
-    // Auto-save profile whenever first name, last name, or level changes once email is verified
+    // Update save button state (turns red if changes made & verified) whenever inputs change
     document.getElementById("profile-first-name")?.addEventListener("input", () => {
       autoSaveProfileIfVerified(false);
+      updateSaveProfileButtonState();
     });
     document.getElementById("profile-last-name")?.addEventListener("input", () => {
       autoSaveProfileIfVerified(false);
+      updateSaveProfileButtonState();
     });
     document.getElementById("profile-level")?.addEventListener("change", () => {
       autoSaveProfileIfVerified(false);
+      updateSaveProfileButtonState();
     });
 
     // Also auto-save if user closes the profile modal via X or backdrop after verifying email
@@ -4221,6 +4366,24 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
     document.getElementById("modal-profile")?.addEventListener("click", (e) => {
       if (e.target && e.target.id === "modal-profile") {
         autoSaveProfileIfVerified(true);
+      }
+    });
+
+    // Intercept Save Profile click if email hasn't been confirmed via 6-digit code or no changes made
+    document.getElementById("btn-save-profile")?.addEventListener("click", (e) => {
+      const email = document.getElementById("profile-email")?.value.trim() || "";
+      if (!state.isEmailVerified || state.verifiedEmail.toLowerCase() !== email.toLowerCase()) {
+        e.preventDefault();
+        e.stopPropagation();
+        showToast("Please send and confirm the 6-digit code to verify your updated email!", "error");
+        bringAttentionToSendCode();
+        return;
+      }
+      if (!hasProfileChanged()) {
+        e.preventDefault();
+        e.stopPropagation();
+        showToast("No changes to save.", "default");
+        return;
       }
     });
 
@@ -4241,7 +4404,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
 
       if (!state.isEmailVerified || state.verifiedEmail.toLowerCase() !== email.toLowerCase()) {
-        showToast("Please verify your email address using the 6-digit code first!", "error");
+        showToast("Please send and confirm the 6-digit code to verify your updated email!", "error");
+        bringAttentionToSendCode();
         return;
       }
 
@@ -4287,6 +4451,16 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       };
 
       saveUserProfile(updatedProfile);
+      state.profileInitialState = {
+        firstName,
+        lastName,
+        email: email.toLowerCase(),
+        phone: cleanPhoneDigits(phone),
+        level,
+        presetId: state.selectedAvatarPreset,
+        uploadedAvatar: state.uploadedAvatarDataUrl
+      };
+      updateSaveProfileButtonState();
       playSuccess();
       closeModal(document.getElementById("modal-profile"));
 
@@ -4481,7 +4655,8 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
         if (!targetInput) return;
         const isPassword = targetInput.type === "password";
         targetInput.type = isPassword ? "text" : "password";
-        btn.textContent = isPassword ? "🙈" : "👁️";
+        btn.innerHTML = isPassword ? SVG_EYE_HIDE : SVG_EYE_SHOW;
+        btn.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
       });
     });
 
@@ -4559,6 +4734,18 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       }
 
       // Successful login
+      match.isLoggedIn = true;
+      if (!match.device) match.device = {};
+      match.device.isLoggedIn = true;
+      const assocIdx = state.associates.findIndex(a => a.id === match.id || (a.email && match.email && a.email.toLowerCase() === match.email.toLowerCase()));
+      if (assocIdx !== -1) {
+        state.associates[assocIdx].isLoggedIn = true;
+        if (!state.associates[assocIdx].device) state.associates[assocIdx].device = {};
+        state.associates[assocIdx].device.isLoggedIn = true;
+      }
+      saveAssociatesRoster(state.associates);
+      upsertAssociateToSupabase(match);
+
       state.userProfile = {
         ...match,
         isLoggedIn: true
@@ -4619,9 +4806,10 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
 
       if (assoc) {
         assoc.password = newPass;
-        if (assoc.device && typeof assoc.device === "object") {
-          assoc.device.password = newPass;
-        }
+        assoc.isLoggedIn = true;
+        if (!assoc.device) assoc.device = {};
+        assoc.device.password = newPass;
+        assoc.device.isLoggedIn = true;
         saveAssociatesRoster(state.associates);
         upsertAssociateToSupabase(assoc);
       }
@@ -4756,6 +4944,25 @@ CREATE POLICY "Public associates access" ON public.associates FOR ALL TO anon, a
       closeModal(document.getElementById("modal-user-menu"));
       logoutUser();
       showToast("Logged out of Store #438 shift board.", "default");
+    });
+
+    // Sub-modal Back Buttons (Return to User Account Menu or Login Modal)
+    document.getElementById("btn-back-profile-modal")?.addEventListener("click", () => {
+      playPop();
+      closeModal(document.getElementById("modal-profile"));
+      if (isUserLoggedIn()) {
+        openUserMenuModal();
+      }
+    });
+
+    document.getElementById("btn-back-change-pwd-modal")?.addEventListener("click", () => {
+      playPop();
+      closeModal(document.getElementById("modal-change-password"));
+      if (isUserLoggedIn()) {
+        openUserMenuModal();
+      } else {
+        openLoginModal();
+      }
     });
 
     // ==========================================================================

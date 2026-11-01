@@ -32,9 +32,12 @@ CREATE TABLE IF NOT EXISTS public.associates (
   avatar TEXT DEFAULT '👨‍🍳',
   avatar_bg TEXT DEFAULT '#FFE8E6',
   email_verified BOOLEAN DEFAULT TRUE,
+  password TEXT DEFAULT '',
   joined_at TIMESTAMPTZ DEFAULT NOW(),
   device JSONB DEFAULT '{}'::jsonb
 );
+
+ALTER TABLE public.associates ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '';
 
 -- 3. Enable Row Level Security (RLS) with public access policies for the publishable key
 ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;

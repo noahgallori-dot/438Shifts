@@ -3746,3 +3746,406 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Password System, Auth Gate & User Menu Styles
+   ========================================================================== */
+
+/* Password Input Wrapper & Toggle Eye */
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrap input {
+  width: 100%;
+  padding-right: 2.75rem !important;
+}
+
+.btn-toggle-pwd {
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--text-muted);
+  user-select: none;
+  transition: opacity 0.15s ease;
+  z-index: 2;
+}
+
+.btn-toggle-pwd:hover {
+  opacity: 0.75;
+}
+
+/* Shifts Locked Overlay Gate */
+.shifts-locked-overlay {
+  margin: 1.25rem 0 2rem 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.locked-overlay-card {
+  background: #FFFFFF;
+  border: 2px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 2rem;
+  max-width: 540px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.locked-overlay-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-red-light);
+  border: 2px solid #FECACA;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.1rem;
+}
+
+.locked-overlay-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.locked-overlay-desc {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 1.5rem;
+}
+
+.locked-overlay-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.login-links-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.btn-link-text {
+  background: none;
+  border: none;
+  color: var(--primary-red);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.btn-link-text:hover {
+  color: var(--primary-red-hover);
+}
+
+.modal-divider-row {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 1.25rem 0 1rem 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.modal-divider-row::before,
+.modal-divider-row::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.modal-divider-row span {
+  padding: 0 0.75rem;
+}
+
+.w-100 {
+  width: 100% !important;
+}
+
+/* User Account Menu */
+.modal-user-menu-card {
+  max-width: 420px;
+}
+
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--surface-border-subtle);
+  margin-bottom: 1.25rem;
+}
+
+.user-avatar-large {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--primary-gold-light);
+  border: 2px solid var(--primary-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.9rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.user-avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-menu-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.user-menu-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-menu-badges {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.user-menu-email {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.user-menu-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.user-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--surface-border);
+  background: #FFFFFF;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--trans-fast);
+  text-align: left;
+}
+
+.user-menu-btn:hover {
+  background: var(--surface-subtle);
+  border-color: #D1C7BA;
+}
+
+.user-menu-btn.danger {
+  color: #DC2626;
+  border-color: #FCA5A5;
+  background: #FEF2F2;
+}
+
+.user-menu-btn.danger:hover {
+  background: #FEE2E2;
+  border-color: #EF4444;
+}
+
+.password-cell {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #1E293B;
+  background: #F8FAFC;
+}
+
+/* ==========================================================================
+   Multi-Step Signup Wizard Styles
+   ========================================================================== */
+
+.modal-signup-card {
+  max-width: 500px;
+  width: 100%;
+}
+
+.signup-wizard-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1.5px solid var(--surface-border-subtle);
+}
+
+.signup-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.signup-step-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary-red);
+}
+
+.signup-step-label .step-hint {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.signup-progress-bar-bg {
+  width: 100%;
+  height: 7px;
+  background: #F1EFEA;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.signup-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-red) 0%, var(--primary-gold) 100%);
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.signup-step-pane {
+  animation: fadeInStep 0.25s ease-out;
+}
+
+@keyframes fadeInStep {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.step-pane-header {
+  margin-bottom: 1.25rem;
+}
+
+.step-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.35rem;
+}
+
+.step-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.step-nav-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+.step-nav-row .btn-submit-primary {
+  flex: 1;
+}
+
+.btn-step-back {
+  background: #FFFFFF;
+  border: 1.5px solid var(--surface-border);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.75rem 1.15rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--trans-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.btn-step-back:hover {
+  background: var(--surface-subtle);
+  color: var(--text-main);
+  border-color: #D1C7BA;
+}
+
+.level-desc-card {
+  background: #FFF9EE;
+  border: 1.5px solid var(--primary-gold);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.85rem;
+  color: #78350F;
+  font-weight: 600;
+  line-height: 1.45;
+  margin-top: -0.25rem;
+  margin-bottom: 1rem;
+}
+
+.step-footer-login-link {
+  text-align: center;
+  margin-top: 1.25rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--surface-border-subtle);
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+

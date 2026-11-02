@@ -1546,11 +1546,11 @@
     btn.style.display = "inline-flex";
     if (state.showAllShiftsHistory) {
       btn.classList.add("active");
-      if (label) label.textContent = "All History (Covered On)";
+      if (label) label.textContent = "Showing All History";
       btn.title = "Showing all shifts including past and covered shifts. Click to view active only.";
     } else {
       btn.classList.remove("active");
-      if (label) label.textContent = "Show All Shift History";
+      if (label) label.textContent = "Show All History";
       btn.title = "Click to show all shift history including past dates and shifts that were covered.";
     }
   }

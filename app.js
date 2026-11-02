@@ -4952,8 +4952,16 @@
         if (Number(existingShift.offerAmount || 0) !== Number(offerVal)) {
           changes.push(`Offer changed from $${existingShift.offerAmount || 0} to $${offerVal}`);
         }
-        if ((existingShift.notes || "") !== (notesVal || "")) {
-          changes.push(`Notes updated`);
+        const oldNote = (existingShift.notes || "").trim();
+        const newNote = (notesVal || "").trim();
+        if (oldNote !== newNote) {
+          if (!oldNote && newNote) {
+            changes.push(`Note added: “${newNote}”`);
+          } else if (oldNote && !newNote) {
+            changes.push(`Note removed (was “${oldNote}”)`);
+          } else {
+            changes.push(`Note changed from “${oldNote}” to “${newNote}”`);
+          }
         }
 
         existingShift.date = dateVal;

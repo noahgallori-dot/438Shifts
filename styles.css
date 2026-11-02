@@ -4756,6 +4756,8 @@ html.user-logged-in #shifts-locked-overlay {
   border-right: 1px solid #F1F5F9;
   border-bottom: 1px solid #F1F5F9;
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .manager-history-entry .history-time {
@@ -4772,6 +4774,8 @@ html.user-logged-in #shifts-locked-overlay {
 
 .manager-history-entry .history-desc {
   color: #334155;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ========================================================================== */
@@ -5122,6 +5126,8 @@ html.user-logged-in #shifts-locked-overlay {
   border-right: 1px solid #F1F5F9;
   border-bottom: 1px solid #F1F5F9;
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .manager-history-entry .history-time {
@@ -5138,6 +5144,8 @@ html.user-logged-in #shifts-locked-overlay {
 
 .manager-history-entry .history-desc {
   color: #334155;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ========================================================================== */

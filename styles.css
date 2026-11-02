@@ -2417,6 +2417,29 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   border: 1px solid #D1D5DB;
   border-radius: var(--radius-sm);
   background: #FFFFFF;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.google-sheet-table-wrapper::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.google-sheet-table-wrapper.is-dragging {
+  cursor: grabbing !important;
+}
+
+.google-sheet-table-wrapper.is-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .google-sheet-table {
@@ -3562,40 +3585,53 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   }
 
   .controls-container {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.5rem 0.5rem;
   }
 
   .date-navigation-row {
     display: contents;
   }
 
+  .controls-right-group {
+    display: contents;
+  }
+
   .current-period-label {
-    order: 1;
-    width: 100%;
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
     font-size: 1.15rem;
     text-align: left;
     line-height: 1.2;
+    margin: 0;
+  }
+
+  .btn-manager-history-toggle {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    font-size: 0.72rem;
+    padding: 0.32rem 0.65rem;
+    height: 32px;
   }
 
   .date-stepper {
-    order: 2;
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
   }
 
   .view-switcher {
     display: none !important;
   }
 
-  .controls-right-group {
-    order: 3;
-    margin-left: auto;
-  }
-
   .level-dropdown-wrapper {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
     flex-shrink: 0;
   }
 
@@ -4483,4 +4519,736 @@ html.user-logged-in #shifts-locked-overlay {
   border-top: 1px solid var(--surface-border-subtle);
   font-size: 0.84rem;
   color: var(--text-muted);
+}
+
+/* ========================================================================== */
+/* Manager Shift History Toggle & Shift State Enhancements */
+/* ========================================================================== */
+.btn-manager-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--primary-red);
+  background: #FFFFFF;
+  color: var(--primary-red);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: var(--trans-fast);
+  white-space: nowrap;
+}
+
+.btn-manager-history-toggle:hover {
+  background: #FEF2F2;
+  transform: translateY(-1px);
+}
+
+.btn-manager-history-toggle.active {
+  background: var(--primary-red);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(227, 25, 55, 0.28);
+}
+
+/* Grayed-out Unclaimed Past Shifts */
+.shift-card.shift-card-passed {
+  background: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+  opacity: 0.72;
+}
+
+.shift-card.shift-card-passed .shift-author-name {
+  color: #64748B !important;
+}
+
+.shift-card.shift-card-passed .shift-avatar-circle {
+  filter: grayscale(100%);
+  opacity: 0.65;
+}
+
+.shift-card.shift-card-passed .level-badge {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  border-color: #CBD5E1 !important;
+}
+
+.shift-card.shift-card-passed .shift-offer-badge {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  border-color: #CBD5E1 !important;
+}
+
+.shift-card.shift-card-passed .shift-time-banner {
+  background: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+
+.shift-card.shift-card-passed .shift-time-range {
+  color: #64748B !important;
+  text-decoration: line-through;
+}
+
+.shift-card.shift-card-passed .shift-duration-pill {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+}
+
+.shift-card.shift-card-passed .status-dot-open {
+  background: #94A3B8 !important;
+  box-shadow: none !important;
+}
+
+.shift-card.shift-card-passed .status-passed-text {
+  color: #64748B !important;
+  font-weight: 700;
+}
+
+.shift-card.shift-card-passed .btn-card-action {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  border-color: #CBD5E1 !important;
+}
+
+.mini-shift-chip.is-passed-chip {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  opacity: 0.65;
+  border-color: #CBD5E1 !important;
+}
+
+.mini-shift-chip.is-passed-chip .mini-shift-time {
+  text-decoration: line-through;
+}
+
+/* Claimed / Taken Shifts (Visible with Manager History Toggle) */
+.shift-card.shift-card-claimed {
+  background: #F8FAFC !important;
+  border-color: #94A3B8 !important;
+  color: #334155 !important;
+  opacity: 0.88;
+}
+
+.shift-card.shift-card-claimed .status-dot-open {
+  background: #2563EB !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+}
+
+.shift-card.shift-card-claimed .status-claimed-text {
+  color: #1D4ED8 !important;
+  font-weight: 800;
+}
+
+.mini-shift-chip.is-claimed-chip {
+  background: #EEF2FF !important;
+  color: #3730A3 !important;
+  border: 1px solid #C7D2FE !important;
+}
+
+/* Shift Details Modal: Status Banners */
+.shift-status-banner {
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.shift-status-banner.passed {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+}
+
+.shift-status-banner.claimed {
+  background: #EFF6FF;
+  color: #1E40AF;
+  border: 1px solid #BFDBFE;
+}
+
+/* Shift Details Modal: Store Manager Audit & History Section */
+.manager-shift-audit {
+  margin-top: 1rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+}
+
+.manager-audit-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--primary-red);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.manager-audit-dates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.manager-audit-date-item {
+  background: #FFFFFF;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid #E2E8F0;
+}
+
+.manager-audit-date-item .label {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.manager-audit-date-item .val {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #1E293B;
+  font-family: 'Space Grotesk', sans-serif;
+  word-break: break-word;
+}
+
+.manager-audit-history-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 0.4rem;
+}
+
+.manager-audit-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.manager-history-entry {
+  font-size: 0.73rem;
+  padding: 0.4rem 0.55rem;
+  background: #FFFFFF;
+  border-radius: 4px;
+  border-left: 3px solid var(--primary-red);
+  border-top: 1px solid #F1F5F9;
+  border-right: 1px solid #F1F5F9;
+  border-bottom: 1px solid #F1F5F9;
+  line-height: 1.4;
+}
+
+.manager-history-entry .history-time {
+  color: #64748B;
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.manager-history-entry .history-editor {
+  color: #0F172A;
+  font-weight: 800;
+  margin-right: 0.35rem;
+}
+
+.manager-history-entry .history-desc {
+  color: #334155;
+}
+
+/* ========================================================================== */
+/* Manager Hub: Approval Highlighting, Password Reveal & Shifts Posted Column */
+/* ========================================================================== */
+.stat-box-approval {
+  background: #FEF3C7 !important;
+  border-color: #FCD34D !important;
+}
+
+.stat-box-approval .stat-label {
+  color: #B45309 !important;
+}
+
+.stat-val-alert {
+  color: #B45309 !important;
+}
+
+.manager-pending-banner {
+  background: #FFFBEB;
+  border: 1.5px solid #FCD34D;
+  color: #92400E;
+  padding: 0.65rem 0.95rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-needs-approval-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-left: 0.35rem;
+  animation: pulse-soft 2.5s infinite ease-in-out;
+}
+
+.row-needs-approval td {
+  background: #FFFDF5 !important;
+}
+
+.row-needs-approval:hover td {
+  background: #FEF9E7 !important;
+}
+
+.roster-pwd-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.roster-pwd-val {
+  font-family: monospace;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.btn-roster-pwd-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--surface-border);
+  background: #FFFFFF;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--trans-fast);
+}
+
+.btn-roster-pwd-toggle:hover {
+  background: #FEF2F2;
+  color: var(--primary-red);
+  border-color: var(--primary-red);
+}
+
+.shifts-posted-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 0.45rem;
+  border-radius: var(--radius-full);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.shifts-posted-count-badge.has-shifts {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.shifts-posted-count-badge.zero-shifts {
+  background: #F3F4F6;
+  color: #9CA3AF;
+  border: 1px solid #E5E7EB;
+}
+
+/* ========================================================================== */
+/* Manager Shift History Toggle & Shift State Enhancements */
+/* ========================================================================== */
+.btn-manager-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--primary-red);
+  background: #FFFFFF;
+  color: var(--primary-red);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: var(--trans-fast);
+  white-space: nowrap;
+}
+
+.btn-manager-history-toggle:hover {
+  background: #FEF2F2;
+  transform: translateY(-1px);
+}
+
+.btn-manager-history-toggle.active {
+  background: var(--primary-red);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(227, 25, 55, 0.28);
+}
+
+/* Grayed-out Unclaimed Past Shifts */
+.shift-card.shift-card-passed {
+  background: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+  opacity: 0.72;
+}
+
+.shift-card.shift-card-passed .shift-author-name {
+  color: #64748B !important;
+}
+
+.shift-card.shift-card-passed .shift-avatar-circle {
+  filter: grayscale(100%);
+  opacity: 0.65;
+}
+
+.shift-card.shift-card-passed .level-badge {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  border-color: #CBD5E1 !important;
+}
+
+.shift-card.shift-card-passed .shift-offer-badge {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  border-color: #CBD5E1 !important;
+}
+
+.shift-card.shift-card-passed .shift-time-banner {
+  background: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+
+.shift-card.shift-card-passed .shift-time-range {
+  color: #64748B !important;
+  text-decoration: line-through;
+}
+
+.shift-card.shift-card-passed .shift-duration-pill {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+}
+
+.shift-card.shift-card-passed .status-dot-open {
+  background: #94A3B8 !important;
+  box-shadow: none !important;
+}
+
+.shift-card.shift-card-passed .status-passed-text {
+  color: #64748B !important;
+  font-weight: 700;
+}
+
+.shift-card.shift-card-passed .btn-card-action {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  border-color: #CBD5E1 !important;
+}
+
+.mini-shift-chip.is-passed-chip {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  opacity: 0.65;
+  border-color: #CBD5E1 !important;
+}
+
+.mini-shift-chip.is-passed-chip .mini-shift-time {
+  text-decoration: line-through;
+}
+
+/* Claimed / Taken Shifts (Visible with Manager History Toggle) */
+.shift-card.shift-card-claimed {
+  background: #F8FAFC !important;
+  border-color: #94A3B8 !important;
+  color: #334155 !important;
+  opacity: 0.88;
+}
+
+.shift-card.shift-card-claimed .status-dot-open {
+  background: #2563EB !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+}
+
+.shift-card.shift-card-claimed .status-claimed-text {
+  color: #1D4ED8 !important;
+  font-weight: 800;
+}
+
+.mini-shift-chip.is-claimed-chip {
+  background: #EEF2FF !important;
+  color: #3730A3 !important;
+  border: 1px solid #C7D2FE !important;
+}
+
+/* Shift Details Modal: Status Banners */
+.shift-status-banner {
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.shift-status-banner.passed {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+}
+
+.shift-status-banner.claimed {
+  background: #EFF6FF;
+  color: #1E40AF;
+  border: 1px solid #BFDBFE;
+}
+
+/* Shift Details Modal: Store Manager Audit & History Section */
+.manager-shift-audit {
+  margin-top: 1rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+}
+
+.manager-audit-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--primary-red);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.manager-audit-dates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.manager-audit-date-item {
+  background: #FFFFFF;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid #E2E8F0;
+}
+
+.manager-audit-date-item .label {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.manager-audit-date-item .val {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #1E293B;
+  font-family: 'Space Grotesk', sans-serif;
+  word-break: break-word;
+}
+
+.manager-audit-history-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 0.4rem;
+}
+
+.manager-audit-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.manager-history-entry {
+  font-size: 0.73rem;
+  padding: 0.4rem 0.55rem;
+  background: #FFFFFF;
+  border-radius: 4px;
+  border-left: 3px solid var(--primary-red);
+  border-top: 1px solid #F1F5F9;
+  border-right: 1px solid #F1F5F9;
+  border-bottom: 1px solid #F1F5F9;
+  line-height: 1.4;
+}
+
+.manager-history-entry .history-time {
+  color: #64748B;
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.manager-history-entry .history-editor {
+  color: #0F172A;
+  font-weight: 800;
+  margin-right: 0.35rem;
+}
+
+.manager-history-entry .history-desc {
+  color: #334155;
+}
+
+/* ========================================================================== */
+/* Manager Hub: Approval Highlighting, Password Reveal & Shifts Posted Column */
+/* ========================================================================== */
+.stat-box-approval {
+  background: #FEF3C7 !important;
+  border-color: #FCD34D !important;
+}
+
+.stat-box-approval .stat-label {
+  color: #B45309 !important;
+}
+
+.stat-val-alert {
+  color: #B45309 !important;
+}
+
+.manager-pending-banner {
+  background: #FFFBEB;
+  border: 1.5px solid #FCD34D;
+  color: #92400E;
+  padding: 0.65rem 0.95rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-needs-approval-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-left: 0.35rem;
+  animation: pulse-soft 2.5s infinite ease-in-out;
+}
+
+.row-needs-approval td {
+  background: #FFFDF5 !important;
+}
+
+.row-needs-approval:hover td {
+  background: #FEF9E7 !important;
+}
+
+.roster-pwd-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.roster-pwd-val {
+  font-family: monospace;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.btn-roster-pwd-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--surface-border);
+  background: #FFFFFF;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--trans-fast);
+}
+
+.btn-roster-pwd-toggle:hover {
+  background: #FEF2F2;
+  color: var(--primary-red);
+  border-color: var(--primary-red);
+}
+
+.shifts-posted-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 0.45rem;
+  border-radius: var(--radius-full);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.shifts-posted-count-badge.has-shifts {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.shifts-posted-count-badge.zero-shifts {
+  background: #F3F4F6;
+  color: #9CA3AF;
+  border: 1px solid #E5E7EB;
 }

@@ -3,7 +3,7 @@
 // Supabase Cloud Sync (Cross-Device), Manager Hub & EmailJS Verification
 // ==========================================================================
 
-(function() {
+(function () {
   "use strict";
 
   // ==========================================================================
@@ -107,7 +107,7 @@
     try {
       const saved = localStorage.getItem(STORAGE_KEY_MANAGER_PASS);
       if (saved && saved.trim()) return saved.trim();
-    } catch (e) {}
+    } catch (e) { }
     return DEFAULT_MANAGER_PASSWORD;
   }
 
@@ -115,7 +115,7 @@
     if (!pwd || !pwd.trim()) return;
     try {
       localStorage.setItem(STORAGE_KEY_MANAGER_PASS, pwd.trim());
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const LEGACY_EMAILJS_VALUES = new Set([
@@ -148,7 +148,7 @@
           return normalized;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return { ...DEFAULT_EMAILJS };
   }
 
@@ -156,7 +156,7 @@
     const cleanCfg = normalizeEmailJSConfig(cfg);
     try {
       localStorage.setItem(STORAGE_KEY_EMAILJS, JSON.stringify(cleanCfg));
-    } catch (e) {}
+    } catch (e) { }
     const inputCfgService = document.getElementById("config-service-id");
     const inputCfgTemplate = document.getElementById("config-template-id");
     const inputCfgKey = document.getElementById("config-public-key");
@@ -228,7 +228,7 @@
         });
       }
       if (resShift.ok) ok = true;
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const resAssoc = await fetch(`${SUPABASE_REST_URL}/associates?on_conflict=id`, {
@@ -237,7 +237,7 @@
         body: JSON.stringify(assocConfigRow)
       });
       if (resAssoc.ok) ok = true;
-    } catch (e) {}
+    } catch (e) { }
 
     return ok;
   }
@@ -255,7 +255,7 @@
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) return new Set(arr);
       }
-    } catch (e) {}
+    } catch (e) { }
     return new Set();
   }
 
@@ -265,7 +265,7 @@
     set.add(shiftId);
     try {
       localStorage.setItem(STORAGE_KEY_DELETED_SHIFTS, JSON.stringify(Array.from(set)));
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Device Fingerprint Detector
@@ -340,6 +340,7 @@
     selectedLevels: new Set(["1", "2", "3", "4", "5", "6"]),
     userProfile: null,
     isAdmin: false,
+    showAllShiftsHistory: false,
     shifts: [],
     associates: [],
     selectedShiftId: null,
@@ -404,7 +405,7 @@
         state.userProfile.password = existing.password;
         try {
           localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
-        } catch (e) {}
+        } catch (e) { }
         return;
       }
       openConfirmPasswordModal(state.userProfile.name, state.userProfile.email);
@@ -526,7 +527,7 @@
       start_time: shift.startTime,
       end_time: shift.endTime,
       notes: shift.notes || "",
-      status: offerAmount > 0 ? `open$${offerAmount}` : "open",
+      status: shift.status === "claimed" ? "claimed" : (offerAmount > 0 ? `open$${offerAmount}` : "open"),
       author_id: shift.authorId,
       author_name: shift.authorName,
       author_email: shift.authorEmail || "",
@@ -664,7 +665,7 @@
         state.supabaseConnected = true;
         ok = true;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       let res = await fetch(`${SUPABASE_REST_URL}/associates?on_conflict=id`, {
@@ -684,7 +685,7 @@
         state.supabaseConnected = true;
         ok = true;
       }
-    } catch (e) {}
+    } catch (e) { }
     return ok;
   }
 
@@ -697,14 +698,14 @@
         headers: getSupabaseHeaders({ "Prefer": "return=minimal" })
       });
       if (res1.ok) ok = true;
-    } catch (e) {}
+    } catch (e) { }
     try {
       const res2 = await fetch(`${SUPABASE_REST_URL}/associates?id=eq.${encodeURIComponent(assocId)}`, {
         method: "DELETE",
         headers: getSupabaseHeaders({ "Prefer": "return=minimal" })
       });
       if (res2.ok) ok = true;
-    } catch (e) {}
+    } catch (e) { }
     return ok;
   }
 
@@ -741,7 +742,7 @@
               if (shiftCfgRow.notes && shiftCfgRow.notes.startsWith("{")) {
                 parsedNotes = JSON.parse(shiftCfgRow.notes);
               }
-            } catch (e) {}
+            } catch (e) { }
             if (parsedNotes.managerPassword) {
               saveManagerPasswordLocalOnly(parsedNotes.managerPassword);
             }
@@ -770,7 +771,7 @@
                     approved: parsed.approved !== false && parsed.device?.approved !== false
                   };
                 }
-              } catch (e) {}
+              } catch (e) { }
               return {
                 id: String(r.id).replace(/^assoc__/, ""),
                 name: r.author_name || "Associate",
@@ -798,9 +799,26 @@
               !String(r.id).startsWith("seed-438-")
           );
 
+          const localMap = new Map((state.shifts || []).map(s => [s.id, s]));
           const cloudShifts = realShiftRows
-            .map(mapDbRowToShift)
-            .filter(s => s && s.status !== "claimed");
+            .map(r => {
+              const parsed = mapDbRowToShift(r);
+              if (!parsed) return null;
+              const local = localMap.get(parsed.id);
+              if (local) {
+                if (!parsed.editHistory || parsed.editHistory.length === 0) {
+                  parsed.editHistory = local.editHistory || [];
+                }
+                if (!parsed.claimedAt && local.claimedAt) parsed.claimedAt = local.claimedAt;
+                if (!parsed.claimedBy && local.claimedBy) parsed.claimedBy = local.claimedBy;
+                if (!parsed.updatedAt && local.updatedAt) parsed.updatedAt = local.updatedAt;
+                if (local.status === "claimed" && parsed.status !== "claimed") {
+                  parsed.status = "claimed";
+                }
+              }
+              return parsed;
+            })
+            .filter(Boolean);
 
           state.shifts = cloudShifts;
           saveShiftsLocalOnly(state.shifts);
@@ -844,72 +862,72 @@
             tableAssociates = personRows.map(mapDbRowToAssociate).filter(Boolean);
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
-          // Merge associates from both sources by ID/email & purge any legacy fake seed associates
-          const mergedMap = new Map();
-          for (const a of [...shiftBackedAssociates, ...tableAssociates]) {
-            if (!a || !a.id) continue;
-            if (isFakeSeedAssociate(a)) {
-              deleteAssociateFromSupabase(a.id);
-              continue;
-            }
-            if (!mergedMap.has(a.id)) {
-              mergedMap.set(a.id, a);
-            } else {
-              const existing = mergedMap.get(a.id);
-              mergedMap.set(a.id, {
-                ...existing,
-                ...a,
-                password: a.password || existing.password || "",
-                device: { ...(existing.device || {}), ...(a.device || {}) }
-              });
-            }
+      // Merge associates from both sources by ID/email & purge any legacy fake seed associates
+      const mergedMap = new Map();
+      for (const a of [...shiftBackedAssociates, ...tableAssociates]) {
+        if (!a || !a.id) continue;
+        if (isFakeSeedAssociate(a)) {
+          deleteAssociateFromSupabase(a.id);
+          continue;
+        }
+        if (!mergedMap.has(a.id)) {
+          mergedMap.set(a.id, a);
+        } else {
+          const existing = mergedMap.get(a.id);
+          mergedMap.set(a.id, {
+            ...existing,
+            ...a,
+            password: a.password || existing.password || "",
+            device: { ...(existing.device || {}), ...(a.device || {}) }
+          });
+        }
+      }
+
+      if (state.supabaseConnected || mergedMap.size > 0 || state.hasLoadedCloudAssociates) {
+        state.hasLoadedCloudAssociates = true;
+        state.associates = Array.from(mergedMap.values());
+        saveAssociatesLocalOnly(state.associates);
+
+        if (state.userProfile && state.userProfile.email) {
+          const match = state.associates.find(
+            a =>
+              a.id === state.userProfile.id ||
+              (a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase())
+          );
+          if (match) {
+            state.userProfile = {
+              ...state.userProfile,
+              id: match.id,
+              name: match.name || state.userProfile.name,
+              email: match.email || state.userProfile.email,
+              phone: match.phone || state.userProfile.phone,
+              level: match.level || state.userProfile.level,
+              avatar: match.avatar || state.userProfile.avatar,
+              avatarBg: match.avatarBg || state.userProfile.avatarBg,
+              password: match.password || state.userProfile.password || "",
+              approved: match.approved !== false
+            };
+            try {
+              localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
+            } catch (e) { }
+            updateUserHeaderDisplay();
+            updateProfileWarningBanner();
+            checkExistingAccountPasswordNeeded();
+          } else {
+            // Associate was removed by manager — log them out and unverify email
+            forceLogoutRemovedUser();
           }
-
-          if (state.supabaseConnected || mergedMap.size > 0 || state.hasLoadedCloudAssociates) {
-            state.hasLoadedCloudAssociates = true;
-            state.associates = Array.from(mergedMap.values());
-            saveAssociatesLocalOnly(state.associates);
-
-            if (state.userProfile && state.userProfile.email) {
-              const match = state.associates.find(
-                a =>
-                  a.id === state.userProfile.id ||
-                  (a.email && a.email.trim().toLowerCase() === state.userProfile.email.trim().toLowerCase())
-              );
-              if (match) {
-                state.userProfile = {
-                  ...state.userProfile,
-                  id: match.id,
-                  name: match.name || state.userProfile.name,
-                  email: match.email || state.userProfile.email,
-                  phone: match.phone || state.userProfile.phone,
-                  level: match.level || state.userProfile.level,
-                  avatar: match.avatar || state.userProfile.avatar,
-                  avatarBg: match.avatarBg || state.userProfile.avatarBg,
-                  password: match.password || state.userProfile.password || "",
-                  approved: match.approved !== false
-                };
-                try {
-                  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
-                } catch (e) {}
-                updateUserHeaderDisplay();
-                updateProfileWarningBanner();
-                checkExistingAccountPasswordNeeded();
-              } else {
-                // Associate was removed by manager — log them out and unverify email
-                forceLogoutRemovedUser();
-              }
-            }
-          } else if (state.associates.length > 0) {
-            state.hasLoadedCloudAssociates = true;
-            for (const a of state.associates) {
-              if (!isFakeSeedAssociate(a)) {
-                upsertAssociateToSupabase(a);
-              }
-            }
+        }
+      } else if (state.associates.length > 0) {
+        state.hasLoadedCloudAssociates = true;
+        for (const a of state.associates) {
+          if (!isFakeSeedAssociate(a)) {
+            upsertAssociateToSupabase(a);
           }
+        }
+      }
 
       updateCountsAndTitle();
       renderCalendarMonth();
@@ -961,7 +979,7 @@
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.07);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   function playSuccess() {
@@ -982,7 +1000,7 @@
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(now + 0.3);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   function triggerConfetti() {
@@ -1053,8 +1071,8 @@
     const iconSvg = type === "success"
       ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>`
       : type === "error"
-      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`
-      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB81C" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB81C" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
     toast.innerHTML = `<span style="display:inline-flex;flex-shrink:0;">${iconSvg}</span> <span style="flex:1;">${message}</span> <span class="toast-close-x" aria-hidden="true">✕</span>`;
     container.appendChild(toast);
 
@@ -1091,7 +1109,7 @@
       toast.style.transition = "none";
       try {
         toast.setPointerCapture(e.pointerId);
-      } catch (err) {}
+      } catch (err) { }
     });
 
     toast.addEventListener("pointermove", (e) => {
@@ -1141,7 +1159,7 @@
         }
         return parsed;
       }
-    } catch (e) {}
+    } catch (e) { }
     return null;
   }
 
@@ -1149,7 +1167,7 @@
     state.userProfile = profile;
     try {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(profile));
-    } catch (e) {}
+    } catch (e) { }
     syncUserProfileToRoster(profile);
     updateUserHeaderDisplay();
     updateProfileWarningBanner();
@@ -1159,7 +1177,7 @@
     // Clear legacy cached local shifts (e.g., stuck local-only shifts on mobile) so Supabase is 100% source of truth
     try {
       localStorage.removeItem(STORAGE_KEY_SHIFTS_LEGACY);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const raw = localStorage.getItem(STORAGE_KEY_SHIFTS);
@@ -1169,7 +1187,6 @@
           const active = parsed.filter(
             s =>
               s &&
-              s.status !== "claimed" &&
               s.status !== "config" &&
               s.status !== "associate_profile" &&
               !String(s.id).startsWith("seed-438-") &&
@@ -1179,7 +1196,7 @@
           return active;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return [];
   }
 
@@ -1197,7 +1214,7 @@
               : "👨‍🍳"
         }));
         localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(compactShifts));
-      } catch (e2) {}
+      } catch (e2) { }
     }
   }
 
@@ -1216,7 +1233,7 @@
           return cleaned;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     saveAssociatesLocalOnly([]);
     return [];
   }
@@ -1235,7 +1252,7 @@
               : "👨‍🍳"
         }));
         localStorage.setItem(STORAGE_KEY_ROSTER, JSON.stringify(compactRoster));
-      } catch (e2) {}
+      } catch (e2) { }
     }
   }
 
@@ -1265,7 +1282,7 @@
       localStorage.removeItem(STORAGE_KEY_USER);
       localStorage.removeItem(STORAGE_KEY_ADMIN);
       localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN);
-    } catch (e) {}
+    } catch (e) { }
     updateAdminHeaderDisplay();
     updateUserHeaderDisplay();
     updateProfileWarningBanner();
@@ -1320,7 +1337,7 @@
     profile.password = password;
     try {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(profile));
-    } catch (e) {}
+    } catch (e) { }
 
     if (existingIdx !== -1) {
       state.associates[existingIdx] = { ...state.associates[existingIdx], ...record };
@@ -1375,6 +1392,63 @@
     return Math.round(((min2 - min1) / 60) * 100) / 100;
   }
 
+  function getShiftEndDateTime(shift) {
+    if (!shift || !shift.date) return null;
+    const [y, m, d] = shift.date.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    let endHour = 23, endMinute = 59;
+    let startHour = 0;
+    if (shift.startTime && shift.startTime.includes(":")) {
+      startHour = parseInt(shift.startTime.split(":")[0], 10) || 0;
+    }
+    let dayOffset = 0;
+    if (shift.endTime && shift.endTime.includes(":")) {
+      const [h, min] = shift.endTime.split(":").map(Number);
+      if (!isNaN(h) && !isNaN(min)) {
+        endHour = h;
+        endMinute = min;
+        if (endHour < startHour) {
+          dayOffset = 1; // shift ends the next morning
+        }
+      }
+    }
+    return new Date(y, m - 1, d + dayOffset, endHour, endMinute, 59, 999);
+  }
+
+  function isShiftPast(shift) {
+    const endDateTime = getShiftEndDateTime(shift);
+    if (!endDateTime) return false;
+    return Date.now() > endDateTime.getTime();
+  }
+
+  function getShiftsCountForAssociate(assoc) {
+    if (!assoc || !Array.isArray(state.shifts)) return 0;
+    return state.shifts.filter(s => {
+      if (!s) return false;
+      if (assoc.id && s.authorId && s.authorId === assoc.id) return true;
+      if (assoc.email && s.authorEmail && s.authorEmail.trim().toLowerCase() === assoc.email.trim().toLowerCase()) return true;
+      const aPhone = cleanPhoneDigits(assoc.phone);
+      const sPhone = cleanPhoneDigits(s.authorPhone);
+      if (aPhone && sPhone && aPhone.length >= 7 && aPhone === sPhone) return true;
+      if (assoc.name && s.authorName && s.authorName.trim().toLowerCase() === assoc.name.trim().toLowerCase()) return true;
+      return false;
+    }).length;
+  }
+
+  function getShiftHistoryItems(shift) {
+    if (!shift) return [];
+    const items = Array.isArray(shift.editHistory) ? [...shift.editHistory] : [];
+    const hasCreation = items.some(it => it && it.changes && it.changes.toLowerCase().includes("original shift"));
+    if (!hasCreation) {
+      items.unshift({
+        timestamp: shift.createdAt || new Date().toISOString(),
+        editorName: shift.authorName || "Associate",
+        changes: "Original shift post created"
+      });
+    }
+    return items;
+  }
+
   function formatDateHuman(dateKey) {
     const [y, m, d] = dateKey.split("-").map(Number);
     const dt = new Date(y, m - 1, d);
@@ -1425,11 +1499,14 @@
   }
 
   function getFilteredShifts() {
+    const showAllHistory = Boolean(state.showAllShiftsHistory);
     return state.shifts.filter(shift => {
-      if (shift.status === "claimed") return false;
-      if (state.filterMineOnly) {
-        if (!isShiftOwner(shift)) return false;
+      if (!shift) return false;
+      if (!showAllHistory) {
+        if (shift.status === "claimed") return false;
+        if (isShiftPast(shift)) return false;
       }
+      if (state.filterMineOnly && !isShiftOwner(shift)) return false;
       const shiftLvlStr = String(shift.authorLevel);
       if (!state.selectedLevels.has(shiftLvlStr)) return false;
       return true;
@@ -1462,6 +1539,22 @@
     }
   }
 
+  function updateHistoryToggleDisplay() {
+    const btn = document.getElementById("btn-toggle-shift-history");
+    const label = document.getElementById("label-toggle-shift-history");
+    if (!btn) return;
+    btn.style.display = "inline-flex";
+    if (state.showAllShiftsHistory) {
+      btn.classList.add("active");
+      if (label) label.textContent = "All History (Covered On)";
+      btn.title = "Showing all shifts including past and covered shifts. Click to view active only.";
+    } else {
+      btn.classList.remove("active");
+      if (label) label.textContent = "Show All Shift History";
+      btn.title = "Click to show all shift history including past dates and shifts that were covered.";
+    }
+  }
+
   function updateAdminHeaderDisplay() {
     const brandBtn = document.getElementById("btn-brand-home");
 
@@ -1470,6 +1563,7 @@
         ? "👑 Store Manager Mode • Tap Logo for Manager Dashboard"
         : "Tap for Home • Hold 1s for Manager Login";
     }
+    updateHistoryToggleDisplay();
   }
 
   function updateProfileWarningBanner() {
@@ -1508,13 +1602,14 @@
   function updateCountsAndTitle() {
     const countEl = document.getElementById("open-shifts-count");
     if (countEl) {
-      countEl.textContent = state.shifts.filter(s => s.status !== "claimed").length;
+      countEl.textContent = state.shifts.filter(s => s && s.status !== "claimed" && !isShiftPast(s)).length;
     }
 
     const periodTitle = document.getElementById("current-period-title");
     if (periodTitle) {
       periodTitle.textContent = formatPeriodTitle(state.activeDate, state.currentView);
     }
+    updateHistoryToggleDisplay();
   }
 
   // ==========================================================================
@@ -1676,13 +1771,20 @@
       const offerAmount = Number(shift.offerAmount) || 0;
       const chip = document.createElement("div");
       chip.className = "mini-shift-chip";
+      const isClaimed = shift.status === "claimed";
+      const isPassed = !isClaimed && isShiftPast(shift);
+      if (isClaimed) {
+        chip.classList.add("is-claimed-chip");
+      } else if (isPassed) {
+        chip.classList.add("is-passed-chip");
+      }
       const canView = canViewCoworkerNames();
 
       chip.title = canView
         ? `${shift.authorName} (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""}`
         : (isUserLoggedIn()
-            ? `Shift (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""} • Pending manager approval`
-            : `Shift (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""} • Log in to contact`);
+          ? `Shift (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""} • Pending manager approval`
+          : `Shift (Level ${shift.authorLevel}) ${formatTime12h(shift.startTime)} - ${formatTime12h(shift.endTime)}${offerAmount > 0 ? ` • Offering $${offerAmount}` : ""} • Log in to contact`);
 
       const timeSpan = document.createElement("span");
       timeSpan.className = "mini-shift-time";
@@ -1867,6 +1969,15 @@
       });
     }
 
+    const isClaimed = shift.status === "claimed";
+    const isPassed = !isClaimed && isShiftPast(shift);
+
+    if (isClaimed) {
+      card.classList.add("shift-card-claimed");
+    } else if (isPassed) {
+      card.classList.add("shift-card-passed");
+    }
+
     const duration = calculateDurationHours(shift.startTime, shift.endTime);
     const avatarMarkup = renderAvatarMarkup(resolveShiftAvatar(shift), canView ? shift.authorName : "Associate");
 
@@ -1882,9 +1993,28 @@
       ? `title="${escapeHtml(shift.authorName)}"`
       : (isUserLoggedIn() ? `title="Account pending manager approval"` : `title="Log in to contact"`);
 
-    const actionText = canView
+    let actionText = canView
       ? "Details →"
       : (isUserLoggedIn() ? "Pending Approval →" : "Log in to contact →");
+
+    let statusMarkup = `
+      <span class="status-dot-open"></span>
+      <span>${isMine ? "Your Shift Post" : "Available"}</span>
+    `;
+
+    if (isClaimed) {
+      statusMarkup = `
+        <span class="status-dot-open" style="background:#2563EB;"></span>
+        <span class="status-claimed-text">Taken / Covered</span>
+      `;
+      actionText = state.isAdmin ? "Details →" : "Covered";
+    } else if (isPassed) {
+      statusMarkup = `
+        <span class="status-dot-open" style="background:#94A3B8;"></span>
+        <span class="status-passed-text">Passed (Unavailable)</span>
+      `;
+      actionText = "Passed";
+    }
 
     card.innerHTML = `
       <div class="shift-card-top">
@@ -1917,11 +2047,10 @@
 
       <div class="shift-card-footer">
         <div class="shift-status-indicator">
-          <span class="status-dot-open"></span>
-          <span>${isMine ? "Your Shift Post" : "Available"}</span>
+          ${statusMarkup}
         </div>
         <div style="display:flex; align-items:center; gap:0.4rem;">
-          ${(isMine || state.isAdmin) ? `<button type="button" class="btn-card-edit" title="Edit shift details"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>` : ""}
+          ${(isMine || state.isAdmin) && !isClaimed ? `<button type="button" class="btn-card-edit" title="Edit shift details"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>` : ""}
           ${state.isAdmin ? `<button type="button" class="btn-card-delete" title="Manager: Delete this shift"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg> Delete</button>` : ""}
           <span class="btn-card-action">${actionText}</span>
         </div>
@@ -2066,15 +2195,70 @@
       }
     }
 
+    const isClaimed = shift.status === "claimed";
+    const isPassed = !isClaimed && isShiftPast(shift);
+
+    // Status Banner in Modal
+    const bannerWrap = document.getElementById("detail-status-banner-wrap");
+    if (bannerWrap) {
+      if (isClaimed) {
+        bannerWrap.innerHTML = `
+          <div class="shift-status-banner claimed">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>This shift has been taken covered!</span>
+          </div>
+        `;
+      } else if (isPassed) {
+        bannerWrap.innerHTML = `
+          <div class="shift-status-banner passed">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>This shift has passed and is no longer available to claim.</span>
+          </div>
+        `;
+      } else {
+        bannerWrap.innerHTML = "";
+      }
+    }
+
     // ONLY the person who posted the shift (or Manager) can edit it; ONLY the poster can mark as "Cover Shift"
     const isMine = isShiftOwner(shift);
     const editShiftBtn = document.getElementById("btn-edit-shift");
     if (editShiftBtn) {
-      editShiftBtn.style.display = (isMine || state.isAdmin) ? "inline-flex" : "none";
+      editShiftBtn.style.display = (isMine || state.isAdmin) && !isClaimed ? "inline-flex" : "none";
     }
     const coveredBtn = document.getElementById("btn-shift-covered");
     if (coveredBtn) {
-      coveredBtn.style.display = isMine ? "inline-flex" : "none";
+      coveredBtn.style.display = isMine && !isClaimed && !isPassed ? "inline-flex" : "none";
+    }
+
+    // If shift has passed or claimed, disable call/sms for non-managers
+    if (isPassed && !state.isAdmin) {
+      if (callBtn) {
+        callBtn.style.pointerEvents = "none";
+        callBtn.style.opacity = "0.5";
+        callBtn.title = "Shift has passed";
+      }
+      if (smsBtn) {
+        smsBtn.style.pointerEvents = "none";
+        smsBtn.style.opacity = "0.5";
+        smsBtn.title = "Shift has passed";
+      }
+    } else {
+      if (callBtn) {
+        callBtn.style.pointerEvents = "auto";
+        callBtn.style.opacity = "1";
+        callBtn.title = "";
+      }
+      if (smsBtn) {
+        smsBtn.style.pointerEvents = "auto";
+        smsBtn.style.opacity = "1";
+        smsBtn.title = "";
+      }
     }
 
     // When signed in as a Manager, allow deleting ANY shift
@@ -2086,6 +2270,28 @@
         if (adminTag) adminTag.style.display = "inline-block";
       } else {
         ownerRow.style.display = "none";
+      }
+    }
+
+    // Manager Audit Section (Dates & Edit History)
+    const auditSection = document.getElementById("manager-shift-audit-section");
+    const auditHistoryListEl = document.getElementById("manager-audit-history-list");
+
+    if (auditSection) {
+      if (state.isAdmin) {
+        auditSection.style.display = "block";
+        if (auditHistoryListEl) {
+          const historyItems = getShiftHistoryItems(shift);
+          auditHistoryListEl.innerHTML = historyItems.map(item => `
+            <div class="manager-history-entry">
+              <span class="history-time">[${formatDateTimeReadable(item.timestamp)}]</span>
+              <strong class="history-editor">${escapeHtml(item.editorName)}:</strong>
+              <span class="history-desc">${escapeHtml(item.changes)}</span>
+            </div>
+          `).join("");
+        }
+      } else {
+        auditSection.style.display = "none";
       }
     }
 
@@ -2562,7 +2768,7 @@
           });
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const config = getEmailJSConfig();
     const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -2708,7 +2914,7 @@
         if (res.ok) {
           return true;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. Fallback to window.emailjs.send if available
       if (window.emailjs && window.emailjs.send) {
@@ -2723,7 +2929,7 @@
             }
           );
           return true;
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -2781,25 +2987,46 @@
         (a.name && a.name.toLowerCase().includes(query)) ||
         (a.email && a.email.toLowerCase().includes(query)) ||
         (a.phone && a.phone.includes(query)) ||
-        String(a.level).includes(query) ||
-        (a.device?.summary && a.device.summary.toLowerCase().includes(query))
+        String(a.level).includes(query)
       );
     });
 
-    // Update Stats (Only Total Associates & Active Shifts)
+    // Update Stats
     const totalCount = state.associates.length;
-    const activeShiftsCount = state.shifts.filter(s => s.status !== "claimed").length;
+    const activeShiftsCount = state.shifts.filter(s => s && s.status !== "claimed" && !isShiftPast(s)).length;
+    const pendingCount = state.associates.filter(a => a.approved === false).length;
 
     const elTotal = document.getElementById("stat-total-crew");
     const elShifts = document.getElementById("stat-active-shifts");
+    const elPending = document.getElementById("stat-pending-approvals");
+    const statBoxPending = document.getElementById("stat-box-pending-approval");
+    const bannerPending = document.getElementById("manager-approval-alert-banner");
 
     if (elTotal) elTotal.textContent = totalCount;
     if (elShifts) elShifts.textContent = activeShiftsCount;
+    if (elPending) elPending.textContent = pendingCount;
+    if (statBoxPending) statBoxPending.style.display = pendingCount > 0 ? "block" : "none";
+
+    if (bannerPending) {
+      if (pendingCount > 0) {
+        bannerPending.style.display = "flex";
+        bannerPending.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <span><strong>Action Required:</strong> ${pendingCount} associate account${pendingCount > 1 ? 's need' : ' needs'} approval. Click "Approve" below to activate!</span>
+        `;
+      } else {
+        bannerPending.style.display = "none";
+      }
+    }
 
     if (associates.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="12" style="text-align:center; padding: 2.5rem; color: var(--text-muted);">
+          <td colspan="9" style="text-align:center; padding: 2.5rem; color: var(--text-muted);">
             No associates found matching "${filterText}".
           </td>
         </tr>
@@ -2809,17 +3036,31 @@
 
     associates.forEach((assoc, idx) => {
       const tr = document.createElement("tr");
-      const avatarMarkup = renderAvatarMarkup(assoc.avatar, assoc.name);
-
-      const dev = assoc.device || { summary: "Desktop Web", screen: "1920 × 1080", isMobile: false, type: "Desktop" };
-      const isMobile = dev.isMobile;
       const isApproved = assoc.approved !== false;
-      const isLoggedOut = isApproved && (assoc.isLoggedIn === false || (assoc.device && assoc.device.isLoggedIn === false));
-      const statusMarkup = !isApproved
-        ? `<span class="sheet-pending-pill">⏳ Pending</span>`
-        : (isLoggedOut
-            ? `<span class="sheet-logged-out-pill">🚪 Logged Out</span>`
-            : `<span class="sheet-approved-pill">✓ Approved</span>`);
+      if (!isApproved) {
+        tr.className = "row-needs-approval";
+      }
+
+      const avatarMarkup = renderAvatarMarkup(assoc.avatar, assoc.name);
+      const shiftsPosted = getShiftsCountForAssociate(assoc);
+
+      const pwdMarkup = assoc.password
+        ? `
+          <div class="roster-pwd-wrap">
+            <span class="roster-pwd-val">••••••••</span>
+            <button type="button" class="btn-roster-pwd-toggle" data-pwd="${escapeHtml(assoc.password)}" title="Click to view password" aria-label="Toggle password visibility">
+              <svg class="eye-open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg class="eye-closed" style="display:none;" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+        `
+        : `<span style="color:#94a3b8;font-style:italic;">(None set)</span>`;
 
       tr.innerHTML = `
         <td class="col-num">${idx + 1}</td>
@@ -2828,38 +3069,56 @@
             <div class="table-user-avatar" style="background: ${assoc.avatarBg || '#FFF8E6'}">
               ${avatarMarkup}
             </div>
-            <span>${assoc.name}</span>
+            <div class="table-user-info">
+              <span>${escapeHtml(assoc.name)}</span>
+              ${!isApproved ? `<span class="table-needs-approval-pill">⚠️ Needs Approval</span>` : ""}
+            </div>
           </div>
-        </td>
-        <td>
-          ${statusMarkup}
         </td>
         <td>
           <span class="level-badge l${assoc.level}">Level ${assoc.level}</span>
         </td>
         <td>
-          <span class="sheet-verified-pill">✓ ${assoc.email || 'None'}</span>
+          <span class="sheet-verified-pill">✓ ${escapeHtml(assoc.email || 'None')}</span>
         </td>
-        <td class="mono-cell">${assoc.phone || 'N/A'}</td>
-        <td class="mono-cell password-cell">${assoc.password ? escapeHtml(assoc.password) : '<span style="color:#94a3b8;font-style:italic;">(None set)</span>'}</td>
+        <td class="mono-cell">${escapeHtml(assoc.phone || 'N/A')}</td>
+        <td class="mono-cell password-cell">${pwdMarkup}</td>
+        <td class="mono-cell" style="text-align:center;">
+          <span class="shifts-posted-count-badge ${shiftsPosted > 0 ? 'has-shifts' : 'zero-shifts'}">${shiftsPosted}</span>
+        </td>
         <td class="mono-cell">${formatDateTimeReadable(assoc.joinedAt)}</td>
         <td>
-          <span class="device-badge-pill ${isMobile ? 'mobile' : 'desktop'}">
-            ${dev.summary || 'Browser'}
-          </span>
-        </td>
-        <td class="mono-cell">${dev.screen || 'N/A'}</td>
-        <td>
-          <span class="device-badge-pill ${isMobile ? 'mobile' : 'desktop'}">${dev.type || (isMobile ? 'Mobile' : 'Desktop')}</span>
-        </td>
-        <td>
           <div class="table-actions-wrap">
-            ${!isApproved ? `<button type="button" class="btn-table-action approve" data-assoc-id="${assoc.id}" title="Approve account request">Approve</button>` : ""}
+            ${!isApproved ? `<button type="button" class="btn-table-action approve" data-assoc-id="${assoc.id}" title="Approve account request">✓ Approve</button>` : ""}
             <button type="button" class="btn-table-action edit" data-assoc-id="${assoc.id}" title="Edit associate info">Edit</button>
             <button type="button" class="btn-table-action remove" data-assoc-id="${assoc.id}" title="Remove associate">Remove</button>
           </div>
         </td>
       `;
+
+      // Password Eye Reveal Toggle
+      tr.querySelector(".btn-roster-pwd-toggle")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        const valSpan = btn.parentElement?.querySelector(".roster-pwd-val");
+        const eyeOpen = btn.querySelector(".eye-open");
+        const eyeClosed = btn.querySelector(".eye-closed");
+        const rawPwd = btn.getAttribute("data-pwd") || "";
+        if (!valSpan) return;
+        const isMasked = valSpan.textContent.startsWith("•");
+
+        if (isMasked) {
+          valSpan.textContent = rawPwd;
+          if (eyeOpen) eyeOpen.style.display = "none";
+          if (eyeClosed) eyeClosed.style.display = "inline-block";
+          btn.title = "Click to mask password";
+        } else {
+          valSpan.textContent = "••••••••";
+          if (eyeOpen) eyeOpen.style.display = "inline-block";
+          if (eyeClosed) eyeClosed.style.display = "none";
+          btn.title = "Click to view password";
+        }
+      });
 
       tr.querySelector(".btn-table-action.approve")?.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -2877,7 +3136,7 @@
           state.userProfile.approved = true;
           try {
             localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
-          } catch (err) {}
+          } catch (err) { }
           updateUserHeaderDisplay();
           updateProfileWarningBanner();
         }
@@ -2919,24 +3178,21 @@
 
   // Export to CSV for Google Sheets
   function exportRosterToCSV() {
-    const headers = ["Index", "Name", "Status", "Level", "Email", "Phone", "Password", "Joined Date", "Device Summary", "Screen Size", "Device Type"];
+    const headers = ["Index", "Name", "Approval", "Level", "Email", "Phone", "Password", "Shifts Posted", "Joined Date"];
     const rows = state.associates.map((a, idx) => {
-      const dev = a.device || {};
       const isApproved = a.approved !== false;
-      const isLoggedOut = isApproved && (a.isLoggedIn === false || (dev && dev.isLoggedIn === false));
-      const statusStr = !isApproved ? "Pending" : (isLoggedOut ? "Logged Out" : "Approved");
+      const approvalStr = isApproved ? "Approved" : "Needs Approval";
+      const shiftsCount = getShiftsCountForAssociate(a);
       return [
         idx + 1,
         `"${(a.name || '').replace(/"/g, '""')}"`,
-        `"${statusStr}"`,
+        `"${approvalStr}"`,
         a.level,
         `"${a.email || ''}"`,
         `"${a.phone || ''}"`,
         `"${(a.password || '').replace(/"/g, '""')}"`,
-        `"${formatDateTimeReadable(a.joinedAt)}"`,
-        `"${(dev.summary || '').replace(/"/g, '""')}"`,
-        `"${dev.screen || ''}"`,
-        `"${dev.type || ''}"`
+        shiftsCount,
+        `"${formatDateTimeReadable(a.joinedAt)}"`
       ];
     });
 
@@ -2955,24 +3211,21 @@
 
   // Copy TSV format to clipboard
   function copyRosterForGoogleSheets() {
-    const headers = ["#", "Name", "Status", "Level", "Email", "Phone", "Password", "Joined Date", "Device", "Screen", "Type"];
+    const headers = ["#", "Name", "Approval", "Level", "Email", "Phone", "Password", "Shifts Posted", "Joined Date"];
     const rows = state.associates.map((a, idx) => {
-      const dev = a.device || {};
       const isApproved = a.approved !== false;
-      const isLoggedOut = isApproved && (a.isLoggedIn === false || (dev && dev.isLoggedIn === false));
-      const statusStr = !isApproved ? "Pending" : (isLoggedOut ? "Logged Out" : "Approved");
+      const approvalStr = isApproved ? "Approved" : "Needs Approval";
+      const shiftsCount = getShiftsCountForAssociate(a);
       return [
         idx + 1,
         a.name,
-        statusStr,
+        approvalStr,
         `Level ${a.level}`,
         a.email,
         a.phone,
         a.password || "",
-        formatDateTimeReadable(a.joinedAt),
-        dev.summary || "",
-        dev.screen || "",
-        dev.type || ""
+        shiftsCount,
+        formatDateTimeReadable(a.joinedAt)
       ];
     });
 
@@ -3005,7 +3258,17 @@
     document.body.classList.add("modal-open");
     document.documentElement.classList.add("modal-open");
     if (modalEl.id === "modal-manager-hub") {
-      try { localStorage.setItem(STORAGE_KEY_ADMIN_HUB_OPEN, "true"); } catch (e) {}
+      try { localStorage.setItem(STORAGE_KEY_ADMIN_HUB_OPEN, "true"); } catch (e) { }
+    }
+    if (modalEl.id === "modal-admin-login") {
+      setTimeout(() => {
+        const input = document.getElementById("admin-password");
+        if (input) {
+          input.value = "";
+          input.focus();
+          input.select?.();
+        }
+      }, 50);
     }
   }
 
@@ -3020,7 +3283,7 @@
       document.documentElement.classList.remove("modal-open");
     }
     if (modalEl.id === "modal-manager-hub") {
-      try { localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN); } catch (e) {}
+      try { localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN); } catch (e) { }
     }
   }
 
@@ -3293,7 +3556,7 @@
         renderManagerHub();
         openModal(document.getElementById("modal-manager-hub"));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Connect to Supabase for cross-device persistence & realtime sync
     syncFromSupabase();
@@ -3705,6 +3968,14 @@
         brandIcon?.classList.remove("holding");
         playSuccess();
         openModal(document.getElementById("modal-admin-login"));
+        setTimeout(() => {
+          const input = document.getElementById("admin-password");
+          if (input) {
+            input.value = "";
+            input.focus();
+            input.select?.();
+          }
+        }, 60);
       }, 1000);
     }
 
@@ -3718,7 +3989,13 @@
 
     function onBrandTap() {
       cancelHold();
-      if (didTriggerAdmin) return;
+      if (didTriggerAdmin) {
+        setTimeout(() => {
+          const input = document.getElementById("admin-password");
+          input?.focus();
+        }, 50);
+        return;
+      }
 
       if (state.isAdmin) {
         playPop();
@@ -3761,13 +4038,16 @@
 
       if (val === getManagerPassword()) {
         state.isAdmin = true;
-        try { localStorage.setItem(STORAGE_KEY_ADMIN, "true"); } catch (e) {}
+        try { localStorage.setItem(STORAGE_KEY_ADMIN, "true"); } catch (e) { }
         playSuccess();
-        showToast("Store Manager Mode Activated! You can now delete any shift or tap the logo for Manager Hub.", "success");
+        showToast("Store Manager Mode Activated!", "success");
         updateAdminHeaderDisplay();
         closeModal(document.getElementById("modal-admin-login"));
         if (input) input.value = "";
         state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+        setTimeout(() => {
+          openManagerSheet();
+        }, 120);
       } else {
         showToast("Incorrect manager password!", "error");
         if (input) {
@@ -3779,14 +4059,28 @@
 
     document.getElementById("btn-manager-logout")?.addEventListener("click", () => {
       state.isAdmin = false;
+      state.showAllShiftsHistory = false;
       try {
         localStorage.removeItem(STORAGE_KEY_ADMIN);
         localStorage.removeItem(STORAGE_KEY_ADMIN_HUB_OPEN);
-      } catch (e) {}
+      } catch (e) { }
       updateAdminHeaderDisplay();
       closeModal(document.getElementById("modal-manager-hub"));
       playPop();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+    });
+
+    // Shift History Toggle (Available for everyone)
+    document.getElementById("btn-toggle-shift-history")?.addEventListener("click", () => {
+      playPop();
+      state.showAllShiftsHistory = !state.showAllShiftsHistory;
+      updateHistoryToggleDisplay();
+      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+      if (state.showAllShiftsHistory) {
+        showToast("Showing all shift history (including past & covered shifts)", "default");
+      } else {
+        showToast("Showing active shifts only", "default");
+      }
     });
 
     document.getElementById("sheet-search-input")?.addEventListener("input", (e) => {
@@ -3795,6 +4089,84 @@
 
     document.getElementById("btn-download-csv")?.addEventListener("click", exportRosterToCSV);
     document.getElementById("btn-copy-sheet")?.addEventListener("click", copyRosterForGoogleSheets);
+
+    // 4b. Drag-to-Navigate Spreadsheet Pan in Manager Hub (PC Mouse Drag & Mobile Touch without Scrollbars)
+    const spreadsheetWrapper = document.querySelector(".google-sheet-table-wrapper");
+    if (spreadsheetWrapper) {
+      let isDown = false;
+      let startX = 0;
+      let startY = 0;
+      let scrollLeft = 0;
+      let scrollTop = 0;
+      let hasDragged = false;
+      const dragThreshold = 5;
+
+      spreadsheetWrapper.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button, a, input, select, textarea")) return;
+        if (e.button !== undefined && e.button !== 0) return;
+
+        isDown = true;
+        hasDragged = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        scrollLeft = spreadsheetWrapper.scrollLeft;
+        scrollTop = spreadsheetWrapper.scrollTop;
+
+        if (e.pointerType === "mouse") {
+          spreadsheetWrapper.classList.add("is-dragging");
+          try {
+            spreadsheetWrapper.setPointerCapture(e.pointerId);
+          } catch (err) { }
+        }
+      });
+
+      spreadsheetWrapper.addEventListener("pointermove", (e) => {
+        if (!isDown) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (!hasDragged && (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)) {
+          hasDragged = true;
+        }
+
+        if (hasDragged && e.pointerType === "mouse") {
+          e.preventDefault();
+          spreadsheetWrapper.scrollLeft = scrollLeft - dx;
+          spreadsheetWrapper.scrollTop = scrollTop - dy;
+        }
+      });
+
+      const endSpreadsheetDrag = (e) => {
+        if (!isDown) return;
+        isDown = false;
+        spreadsheetWrapper.classList.remove("is-dragging");
+        if (e && e.pointerId) {
+          try {
+            spreadsheetWrapper.releasePointerCapture(e.pointerId);
+          } catch (err) { }
+        }
+        if (hasDragged) {
+          const captureClick = (ev) => {
+            ev.stopPropagation();
+            ev.preventDefault();
+            window.removeEventListener("click", captureClick, true);
+          };
+          window.addEventListener("click", captureClick, true);
+          setTimeout(() => {
+            window.removeEventListener("click", captureClick, true);
+            hasDragged = false;
+          }, 120);
+        }
+      };
+
+      spreadsheetWrapper.addEventListener("pointerup", endSpreadsheetDrag);
+      spreadsheetWrapper.addEventListener("pointercancel", endSpreadsheetDrag);
+      spreadsheetWrapper.addEventListener("pointerleave", (e) => {
+        if (!spreadsheetWrapper.hasPointerCapture || !spreadsheetWrapper.hasPointerCapture(e.pointerId)) {
+          endSpreadsheetDrag(e);
+        }
+      });
+    }
 
     // Change Manager Password Panel inside Manager Hub
     const btnChangeManagerPassword = document.getElementById("btn-change-manager-password");
@@ -3924,7 +4296,7 @@
         };
         try {
           localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.userProfile));
-        } catch (err) {}
+        } catch (err) { }
         updateUserHeaderDisplay();
         updateProfileWarningBanner();
       }
@@ -4570,11 +4942,34 @@
       }
 
       if (existingShift) {
+        const changes = [];
+        if (existingShift.date !== dateVal) {
+          changes.push(`Date changed from ${formatDateHuman(existingShift.date)} to ${formatDateHuman(dateVal)}`);
+        }
+        if (existingShift.startTime !== startTimeVal || existingShift.endTime !== endTimeVal) {
+          changes.push(`Time changed from ${formatTime12h(existingShift.startTime)} – ${formatTime12h(existingShift.endTime)} to ${formatTime12h(startTimeVal)} – ${formatTime12h(endTimeVal)}`);
+        }
+        if (Number(existingShift.offerAmount || 0) !== Number(offerVal)) {
+          changes.push(`Offer changed from $${existingShift.offerAmount || 0} to $${offerVal}`);
+        }
+        if ((existingShift.notes || "") !== (notesVal || "")) {
+          changes.push(`Notes updated`);
+        }
+
         existingShift.date = dateVal;
         existingShift.startTime = startTimeVal;
         existingShift.endTime = endTimeVal;
         existingShift.notes = notesVal;
         existingShift.offerAmount = offerVal;
+        existingShift.updatedAt = new Date().toISOString();
+
+        existingShift.editHistory = getShiftHistoryItems(existingShift);
+        const editor = state.isAdmin ? "Store Manager" : (state.userProfile?.name || "Shift Poster");
+        existingShift.editHistory.push({
+          timestamp: existingShift.updatedAt,
+          editorName: editor,
+          changes: changes.length > 0 ? changes.join(", ") : "Shift details updated"
+        });
 
         saveShifts(state.shifts);
         upsertShiftToSupabase(existingShift);
@@ -4591,6 +4986,7 @@
         return;
       }
 
+      const nowIso = new Date().toISOString();
       const newShift = {
         id: `shift-${Date.now()}`,
         date: dateVal,
@@ -4606,7 +5002,14 @@
         authorLevel: state.userProfile.level,
         authorAvatar: state.userProfile.avatar,
         authorAvatarBg: state.userProfile.avatarBg,
-        createdAt: new Date().toISOString()
+        createdAt: nowIso,
+        editHistory: [
+          {
+            timestamp: nowIso,
+            editorName: state.userProfile.name,
+            changes: "Original shift post created"
+          }
+        ]
       };
 
       state.shifts.unshift(newShift);
@@ -4639,7 +5042,7 @@
       openPostShiftModal(null, shift);
     });
 
-    // 13. Cover Shift Action (ONLY the person who posted the shift can click this; removes it forever!)
+    // 13. Cover Shift Action (Marks as covered / taken, moves to shift history)
     document.getElementById("btn-shift-covered")?.addEventListener("click", () => {
       const shift = state.shifts.find(s => s.id === state.selectedShiftId);
       if (!shift) return;
@@ -4649,11 +5052,24 @@
         return;
       }
 
-      permanentlyRemoveShift(
-        shift.id,
-        "Shift covered! Taken down from the board for everyone.",
-        true
-      );
+      shift.status = "claimed";
+      shift.claimedAt = new Date().toISOString();
+      shift.claimedBy = state.userProfile?.name || (state.isAdmin ? "Store Manager" : "Shift Poster");
+      shift.editHistory = getShiftHistoryItems(shift);
+      shift.editHistory.push({
+        timestamp: shift.claimedAt,
+        editorName: shift.claimedBy,
+        changes: `Marked as covered / taken by ${shift.claimedBy}`
+      });
+
+      saveShifts(state.shifts);
+      upsertShiftToSupabase(shift);
+      playSuccess();
+      triggerConfetti();
+      showToast("Shift marked as covered! Shift moved to history.", "success");
+      closeModal(document.getElementById("modal-shift-details"));
+      updateCountsAndTitle();
+      state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
     });
 
     // 14. Copy Phone Number
@@ -4739,7 +5155,7 @@
               saveAssociatesLocalOnly(state.associates);
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (!match) {
@@ -4756,10 +5172,10 @@
                 match = JSON.parse(assocRow.notes);
                 state.associates.push(match);
                 saveAssociatesLocalOnly(state.associates);
-              } catch (e) {}
+              } catch (e) { }
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (!match) {
@@ -4831,7 +5247,7 @@
     document.getElementById("form-confirm-password")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const email = document.getElementById("confirm-pwd-email")?.value.trim().toLowerCase() ||
-                    (state.userProfile ? state.userProfile.email.toLowerCase() : "");
+        (state.userProfile ? state.userProfile.email.toLowerCase() : "");
       const newPass = document.getElementById("confirm-new-password")?.value || "";
       const repeatPass = document.getElementById("confirm-new-password-repeat")?.value || "";
 
@@ -4925,7 +5341,7 @@
               state.associates.push(assoc);
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (!assoc) {
@@ -4941,10 +5357,10 @@
               try {
                 assoc = JSON.parse(assocRow.notes);
                 state.associates.push(assoc);
-              } catch (e) {}
+              } catch (e) { }
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (!assoc) {

@@ -278,7 +278,7 @@ body::before {
   padding: 4px;
   border-radius: var(--radius-full);
   border: 1.5px solid var(--surface-border);
-  min-width: 196px;
+  min-width: 220px;
 }
 
 .view-pill-glider {
@@ -739,12 +739,152 @@ body::before {
   color: var(--text-main);
 }
 
-font-size: 0.78rem;
-font-weight: 800;
-color: var(--primary-red);
-cursor: pointer;
-text-decoration: underline;
-padding: 0.2rem 0.4rem;
+/* Shift View Filter & Sort Dropdown (Replaces <Today> stepper in Shift View) */
+.shift-filter-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.shift-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.95rem;
+  background: #FFFFFF;
+  border: 1.5px solid var(--surface-border);
+  border-radius: var(--radius-full);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: var(--trans-spring);
+  box-shadow: var(--shadow-xs);
+  user-select: none;
+}
+
+.shift-filter-btn:hover,
+.shift-filter-btn[aria-expanded="true"],
+.shift-filter-btn.has-active-filter {
+  border-color: var(--primary-red);
+  color: var(--primary-red);
+  box-shadow: 0 2px 8px rgba(200, 25, 18, 0.12);
+}
+
+.shift-filter-btn[aria-expanded="true"] .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.shift-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 270px;
+  max-width: 320px;
+  background: #FFFFFF;
+  border: 1.5px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  padding: 0.65rem;
+  z-index: 100;
+  animation: dropDownSlide 0.18s ease-out;
+}
+
+.shift-filter-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.4rem 0.45rem 0.4rem;
+  border-bottom: 1px solid var(--surface-border-subtle);
+  margin-bottom: 0.45rem;
+}
+
+.shift-filter-section {
+  padding: 0.35rem 0.2rem;
+  border-bottom: 1px solid var(--surface-border-subtle);
+}
+
+.shift-filter-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0.1rem;
+}
+
+.shift-filter-section-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 0.35rem;
+  padding-left: 0.3rem;
+}
+
+.shift-filter-options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.shift-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.shift-filter-item:hover {
+  background: var(--surface-subtle);
+}
+
+.shift-filter-item input {
+  display: none;
+}
+
+.shift-filter-item-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.radio-indicator {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid var(--surface-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  background: #FFFFFF;
+}
+
+.shift-filter-item input:checked + .radio-indicator {
+  border-color: var(--primary-red);
+  background: var(--primary-red);
+  box-shadow: inset 0 0 0 3px #FFFFFF;
+}
+
+.shift-filter-item.checkbox input:checked + .check-box-indicator {
+  background: var(--primary-red);
+  color: #FFFFFF;
+  border-color: var(--primary-red);
+}
+
+.shifts-date-offer-pill {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: #DCFCE7;
+  border: 1px solid #86EFAC;
+  color: #166534;
 }
 
 /* ==========================================================================
@@ -1132,21 +1272,166 @@ padding: 0.2rem 0.4rem;
    Weekly View (7 Day Columns)
    ========================================================================== */
 
+/* ==========================================================================
+   Shifts View (All Available Shifts & Grouped Dates)
+   ========================================================================== */
+
+.shifts-schedule-wrapper,
 .week-schedule-wrapper {
-  background: #FFFFFF;
+  background: transparent;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--surface-border);
-  box-shadow: var(--shadow-sm);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   position: relative;
+  width: 100%;
 }
 
+.shifts-all-container,
 .week-columns-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.shifts-date-group {
+  background: #FFFFFF;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--surface-border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: var(--trans-spring);
+}
+
+.shifts-date-group:hover {
+  border-color: rgba(200, 25, 18, 0.25);
+  box-shadow: var(--shadow-md);
+}
+
+.shifts-date-header {
+  padding: 0.85rem 1.15rem;
+  background: #FAF8F4;
+  border-bottom: 1.5px solid var(--surface-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.shifts-date-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.shifts-date-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-red);
+  line-height: 1;
+}
+
+.ui-cal-icon,
+.ui-money-icon,
+.ui-hourglass-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.shifts-date-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+
+.shifts-date-badge {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.73rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-subtle);
+  border: 1px solid var(--surface-border);
+  color: var(--text-secondary);
+}
+
+.shifts-date-badge.is-today {
+  background: var(--primary-red);
+  color: #FFFFFF;
+  border-color: var(--primary-red);
+}
+
+.shifts-group-cards-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(180px, 1fr));
-  min-width: 1080px;
-  border-bottom: 1px solid var(--surface-border-subtle);
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+@media (max-width: 640px) {
+  .shifts-group-cards-grid {
+    grid-template-columns: 1fr;
+    padding: 0.75rem;
+  }
+}
+
+.shifts-empty-card {
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  background: #FFFFFF;
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--surface-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.shifts-empty-card .empty-palm {
+  font-size: 2.8rem;
+  line-height: 1;
+}
+
+.shifts-empty-card h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.shifts-empty-card p {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  max-width: 380px;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.shifts-empty-card button {
+  margin-top: 0.5rem;
+}
+
+.shift-card-date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--primary-red);
+  background: var(--primary-red-light);
+  border: 1px solid rgba(200, 25, 18, 0.2);
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 
 .week-day-column {
@@ -2119,6 +2404,44 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   font-weight: 700;
   color: var(--text-main);
   margin-bottom: 0.4rem;
+}
+
+.btn-mini-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  background: var(--surface-subtle);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.65rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--primary-red);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.btn-mini-text:hover {
+  background: var(--primary-red-light);
+  border-color: var(--primary-red);
+  color: var(--primary-red-hover);
+  transform: translateY(-1px);
+}
+
+.btn-mini-text:active {
+  transform: translateY(0);
+}
+
+.btn-mini-text:disabled,
+.btn-mini-text.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
 }
 
 .code-action-row {
@@ -4748,13 +5071,13 @@ html.user-logged-in #shifts-locked-overlay {
 
 .manager-history-entry {
   font-size: 0.73rem;
-  padding: 0.4rem 0.55rem;
+  padding: 0.5rem 0.65rem;
   background: #FFFFFF;
-  border-radius: 4px;
-  border-left: 3px solid var(--primary-red);
-  border-top: 1px solid #F1F5F9;
-  border-right: 1px solid #F1F5F9;
-  border-bottom: 1px solid #F1F5F9;
+  border-radius: 6px;
+  border-left: 3.5px solid var(--primary-red);
+  border-top: 1px solid #E2E8F0;
+  border-right: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E2E8F0;
   line-height: 1.4;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -4764,6 +5087,118 @@ html.user-logged-in #shifts-locked-overlay {
   color: #64748B;
   font-weight: 700;
   margin-right: 0.35rem;
+}
+
+/* Shift History Original Post Card */
+.shift-history-orig-post {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.shift-history-orig-post .orig-post-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.shift-history-orig-post .orig-post-title {
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.shift-history-orig-post .orig-post-date {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.shift-history-orig-post .orig-post-author {
+  font-size: 0.72rem;
+  color: var(--text-sub);
+}
+
+/* Shift History Change Rows (Before & After) */
+.history-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+  font-size: 0.73rem;
+}
+
+.history-entry-header .history-editor {
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.history-entry-header .history-time {
+  color: #64748B;
+  font-size: 0.68rem;
+}
+
+.history-changes-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.history-change-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  background: #F8FAFC;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #E2E8F0;
+}
+
+.history-change-label {
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  font-size: 0.64rem;
+  letter-spacing: 0.3px;
+}
+
+.history-diff-before {
+  color: #DC2626;
+  background: #FEE2E2;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-decoration: line-through;
+}
+
+.history-diff-arrow {
+  color: #64748B;
+  font-weight: 800;
+}
+
+.history-diff-after {
+  color: #16A34A;
+  background: #DCFCE7;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.shift-history-no-edits {
+  font-size: 0.73rem;
+  color: #64748B;
+  font-style: italic;
+  padding: 0.4rem 0.2rem;
 }
 
 .manager-history-entry .history-editor {
@@ -5118,13 +5553,13 @@ html.user-logged-in #shifts-locked-overlay {
 
 .manager-history-entry {
   font-size: 0.73rem;
-  padding: 0.4rem 0.55rem;
+  padding: 0.5rem 0.65rem;
   background: #FFFFFF;
-  border-radius: 4px;
-  border-left: 3px solid var(--primary-red);
-  border-top: 1px solid #F1F5F9;
-  border-right: 1px solid #F1F5F9;
-  border-bottom: 1px solid #F1F5F9;
+  border-radius: 6px;
+  border-left: 3.5px solid var(--primary-red);
+  border-top: 1px solid #E2E8F0;
+  border-right: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E2E8F0;
   line-height: 1.4;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -5134,6 +5569,118 @@ html.user-logged-in #shifts-locked-overlay {
   color: #64748B;
   font-weight: 700;
   margin-right: 0.35rem;
+}
+
+/* Shift History Original Post Card */
+.shift-history-orig-post {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.shift-history-orig-post .orig-post-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.shift-history-orig-post .orig-post-title {
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.shift-history-orig-post .orig-post-date {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.shift-history-orig-post .orig-post-author {
+  font-size: 0.72rem;
+  color: var(--text-sub);
+}
+
+/* Shift History Change Rows (Before & After) */
+.history-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+  font-size: 0.73rem;
+}
+
+.history-entry-header .history-editor {
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.history-entry-header .history-time {
+  color: #64748B;
+  font-size: 0.68rem;
+}
+
+.history-changes-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.history-change-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  background: #F8FAFC;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #E2E8F0;
+}
+
+.history-change-label {
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  font-size: 0.64rem;
+  letter-spacing: 0.3px;
+}
+
+.history-diff-before {
+  color: #DC2626;
+  background: #FEE2E2;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-decoration: line-through;
+}
+
+.history-diff-arrow {
+  color: #64748B;
+  font-weight: 800;
+}
+
+.history-diff-after {
+  color: #16A34A;
+  background: #DCFCE7;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.shift-history-no-edits {
+  font-size: 0.73rem;
+  color: #64748B;
+  font-style: italic;
+  padding: 0.4rem 0.2rem;
 }
 
 .manager-history-entry .history-editor {

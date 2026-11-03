@@ -338,6 +338,10 @@
     userSelectedCalendarDay: false,
     filterMineOnly: false,
     selectedLevels: new Set(["1", "2", "3", "4", "5", "6"]),
+    shiftSort: "date_asc",
+    shiftFilterOffersOnly: false,
+    shiftFilterDuration: "all",
+    shiftFilterTime: "all",
     userProfile: null,
     isAdmin: false,
     showAllShiftsHistory: false,
@@ -461,10 +465,24 @@
   // ==========================================================================
   // Supabase Cloud Sync Functions (Shifts & Associates Across Devices)
   // ==========================================================================
+  function cleanShiftNotes(notes) {
+    if (!notes) return "";
+    return String(notes)
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/%5B%7B[\s\S]*?%7D%5D/gi, "")
+      .replace(/<!--edit_history:[\s\S]*?-->/gi, "")
+      .trim();
+  }
+
   function mapDbRowToShift(row) {
     if (!row) return null;
     if (row.data && typeof row.data === "object") {
-      return { ...row.data, id: row.id || row.data.id };
+      const d = row.data;
+      return {
+        ...d,
+        id: row.id || d.id,
+        notes: cleanShiftNotes(d.notes)
+      };
     }
     let rawStatus = String(row.status || "open");
     let offerFromStatus = 0;
@@ -476,12 +494,28 @@
       0,
       Math.min(100, parseInt(row.offer_amount ?? row.offerAmount ?? offerFromStatus ?? 0, 10) || 0)
     );
+
+    let cleanNotes = cleanShiftNotes(row.notes || "");
+    let editHistory = Array.isArray(row.editHistory || row.edit_history) ? [...(row.editHistory || row.edit_history)] : [];
+    if (String(row.notes || "").includes("<!--edit_history:")) {
+      const match = String(row.notes).match(/<!--edit_history:([\s\S]*?)-->/);
+      if (match && match[1]) {
+        try {
+          const parsedHist = JSON.parse(decodeURIComponent(match[1]));
+          if (Array.isArray(parsedHist) && parsedHist.length > 0) {
+            editHistory = parsedHist;
+          }
+        } catch (e) { }
+      }
+    }
+
     return {
       id: row.id,
       date: row.date,
       startTime: row.start_time || row.startTime || "16:00",
       endTime: row.end_time || row.endTime || "22:30",
-      notes: row.notes || "",
+      notes: cleanNotes,
+      editHistory: editHistory,
       offerAmount,
       status: rawStatus,
       authorId: row.author_id || row.authorId || "",
@@ -521,12 +555,13 @@
       shift.authorAvatar && !String(shift.authorAvatar).startsWith("data:image")
         ? shift.authorAvatar
         : "👨‍🍳";
+
     return {
       id: shift.id,
       date: shift.date,
       start_time: shift.startTime,
       end_time: shift.endTime,
-      notes: shift.notes || "",
+      notes: cleanShiftNotes(shift.notes),
       status: shift.status === "claimed" ? "claimed" : (offerAmount > 0 ? `open$${offerAmount}` : "open"),
       author_id: shift.authorId,
       author_name: shift.authorName,
@@ -537,6 +572,35 @@
       author_avatar_bg: shift.authorAvatarBg || "#FFE8E6",
       created_at: shift.createdAt || new Date().toISOString()
     };
+  }
+
+  async function upsertShiftHistoryToSupabase(shift) {
+    if (!shift || !Array.isArray(shift.editHistory) || shift.editHistory.length === 0) return;
+    try {
+      const histRow = {
+        id: `shifthist__${shift.id}`,
+        date: shift.date || "1970-01-01",
+        start_time: "00:00",
+        end_time: "00:00",
+        notes: JSON.stringify(shift.editHistory),
+        status: "shift_history",
+        author_id: shift.authorId || "",
+        author_name: shift.authorName || "Associate",
+        author_email: shift.authorEmail || "",
+        author_phone: shift.authorPhone || "(000) 000-0000",
+        author_level: Number(shift.authorLevel || 1),
+        author_avatar: (shift.authorAvatar && !String(shift.authorAvatar).startsWith("data:image")) ? shift.authorAvatar : "👨‍🍳",
+        author_avatar_bg: shift.authorAvatarBg || "#FFE8E6",
+        created_at: shift.createdAt || new Date().toISOString()
+      };
+      await fetch(`${SUPABASE_REST_URL}/shifts?on_conflict=id`, {
+        method: "POST",
+        headers: getSupabaseHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify(histRow)
+      });
+    } catch (e) {
+      console.warn("Supabase shift history sync warning:", e);
+    }
   }
 
   function mapDbRowToAssociate(row) {
@@ -601,6 +665,9 @@
       }
       if (res.ok) {
         state.supabaseConnected = true;
+        if (Array.isArray(shift.editHistory) && shift.editHistory.length > 0) {
+          await upsertShiftHistoryToSupabase(shift);
+        }
         return true;
       }
     } catch (e) {
@@ -613,14 +680,16 @@
     if (!shiftId) return false;
     markShiftIdDeleted(shiftId);
     try {
-      const res = await fetch(`${SUPABASE_REST_URL}/shifts?id=eq.${encodeURIComponent(shiftId)}`, {
+      await fetch(`${SUPABASE_REST_URL}/shifts?id=eq.${encodeURIComponent(shiftId)}`, {
         method: "DELETE",
         headers: getSupabaseHeaders({ "Prefer": "return=minimal" })
       });
-      if (res.ok) {
-        state.supabaseConnected = true;
-        return true;
-      }
+      await fetch(`${SUPABASE_REST_URL}/shifts?id=eq.${encodeURIComponent(`shifthist__${shiftId}`)}`, {
+        method: "DELETE",
+        headers: getSupabaseHeaders({ "Prefer": "return=minimal" })
+      });
+      state.supabaseConnected = true;
+      return true;
     } catch (e) {
       console.warn("Supabase shift delete error:", e);
     }
@@ -788,14 +857,29 @@
             })
             .filter(Boolean);
 
-          // C. Extract Real Shifts — Supabase is 100% single source of truth (even if 0 shifts!)
+          // C. Extract Real Shifts & Dedicated History Rows
+          const historyMap = new Map();
+          rows.forEach(r => {
+            if (r && (r.status === "shift_history" || String(r.id).startsWith("shifthist__"))) {
+              const targetShiftId = String(r.id).replace(/^shifthist__/, "");
+              try {
+                const hist = JSON.parse(r.notes);
+                if (Array.isArray(hist) && hist.length > 0) {
+                  historyMap.set(targetShiftId, hist);
+                }
+              } catch (e) { }
+            }
+          });
+
           const realShiftRows = rows.filter(
             r =>
               r &&
               r.id !== SUPABASE_EMAILJS_CONFIG_ID &&
               r.status !== "config" &&
               r.status !== "associate_profile" &&
+              r.status !== "shift_history" &&
               !String(r.id).startsWith("assoc__") &&
+              !String(r.id).startsWith("shifthist__") &&
               !String(r.id).startsWith("seed-438-")
           );
 
@@ -804,11 +888,32 @@
             .map(r => {
               const parsed = mapDbRowToShift(r);
               if (!parsed) return null;
+              parsed.notes = cleanShiftNotes(parsed.notes);
+
+              const cloudHist = historyMap.get(parsed.id) || parsed.editHistory || [];
               const local = localMap.get(parsed.id);
-              if (local) {
-                if (!parsed.editHistory || parsed.editHistory.length === 0) {
-                  parsed.editHistory = local.editHistory || [];
+              const localHist = (local && Array.isArray(local.editHistory)) ? local.editHistory : [];
+
+              // Merge cloud and local history without losing either
+              const mergedHist = [];
+              const seenKeys = new Set();
+              [...cloudHist, ...localHist].forEach(item => {
+                if (!item) return;
+                const k = `${item.timestamp || ""}_${item.changes || ""}_${item.action || ""}`;
+                if (!seenKeys.has(k)) {
+                  seenKeys.add(k);
+                  mergedHist.push(item);
                 }
+              });
+              mergedHist.sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+              parsed.editHistory = mergedHist;
+
+              // If local had edits that cloud didn't have yet, immediately push to Supabase!
+              if (localHist.length > cloudHist.length) {
+                upsertShiftHistoryToSupabase(parsed);
+              }
+
+              if (local) {
                 if (!parsed.claimedAt && local.claimedAt) parsed.claimedAt = local.claimedAt;
                 if (!parsed.claimedBy && local.claimedBy) parsed.claimedBy = local.claimedBy;
                 if (!parsed.updatedAt && local.updatedAt) parsed.updatedAt = local.updatedAt;
@@ -864,23 +969,41 @@
         }
       } catch (e) { }
 
-      // Merge associates from both sources by ID/email & purge any legacy fake seed associates
+      // Merge associates from both sources by ID and normalized Email & purge any legacy fake seed associates
       const mergedMap = new Map();
+      const emailToKeyMap = new Map();
       for (const a of [...shiftBackedAssociates, ...tableAssociates]) {
-        if (!a || !a.id) continue;
+        if (!a || (!a.id && !a.email)) continue;
         if (isFakeSeedAssociate(a)) {
-          deleteAssociateFromSupabase(a.id);
+          if (a.id) deleteAssociateFromSupabase(a.id);
           continue;
         }
-        if (!mergedMap.has(a.id)) {
-          mergedMap.set(a.id, a);
+
+        const normEmail = (a.email || "").trim().toLowerCase();
+        let canonicalId = a.id;
+        if (normEmail && emailToKeyMap.has(normEmail)) {
+          canonicalId = emailToKeyMap.get(normEmail);
+        } else if (normEmail && canonicalId) {
+          emailToKeyMap.set(normEmail, canonicalId);
+        }
+
+        if (!mergedMap.has(canonicalId)) {
+          mergedMap.set(canonicalId, { ...a, id: canonicalId });
         } else {
-          const existing = mergedMap.get(a.id);
-          mergedMap.set(a.id, {
+          const existing = mergedMap.get(canonicalId);
+          // Crucial fix: If either record was approved, preserve approved = true!
+          const wasApproved = existing.approved === true || a.approved === true || (existing.approved !== false && a.approved !== false);
+          mergedMap.set(canonicalId, {
             ...existing,
             ...a,
+            id: canonicalId,
+            approved: wasApproved,
             password: a.password || existing.password || "",
-            device: { ...(existing.device || {}), ...(a.device || {}) }
+            device: {
+              ...(existing.device || {}),
+              ...(a.device || {}),
+              approved: wasApproved
+            }
           });
         }
       }
@@ -1189,9 +1312,14 @@
               s &&
               s.status !== "config" &&
               s.status !== "associate_profile" &&
+              s.status !== "shift_history" &&
               !String(s.id).startsWith("seed-438-") &&
+              !String(s.id).startsWith("shifthist__") &&
               !String(s.id).startsWith("assoc__")
-          );
+          ).map(s => ({
+            ...s,
+            notes: cleanShiftNotes(s.notes)
+          }));
           saveShiftsLocalOnly(active);
           return active;
         }
@@ -1301,12 +1429,22 @@
   function syncUserProfileToRoster(profile) {
     if (!profile || !profile.email) return;
     const existingIdx = state.associates.findIndex(
-      a => a.id === profile.id || (a.email && a.email.toLowerCase() === profile.email.toLowerCase())
+      a => a.id === profile.id || (a.email && a.email.trim().toLowerCase() === profile.email.trim().toLowerCase())
     );
     const dev = profile.device || detectDeviceDetails();
-    const isApproved = profile.approved !== undefined
-      ? profile.approved
-      : (existingIdx !== -1 ? state.associates[existingIdx].approved !== false : false);
+    // Once approved, client device sync CANNOT revoke approval!
+    let isApproved = false;
+    if (existingIdx !== -1 && state.associates[existingIdx].approved !== false) {
+      isApproved = true;
+    } else if (state.isAdmin) {
+      isApproved = profile.approved !== false;
+    } else if (profile.approved === true) {
+      isApproved = true;
+    } else if (existingIdx !== -1) {
+      isApproved = state.associates[existingIdx].approved !== false;
+    } else {
+      isApproved = false;
+    }
     const fullParts = (profile.name || "").trim().split(/\s+/);
     const firstName = profile.firstName !== undefined ? profile.firstName : (fullParts[0] || "");
     const lastName = profile.lastName !== undefined ? profile.lastName : (fullParts.slice(1).join(" ") || "");
@@ -1438,12 +1576,13 @@
   function getShiftHistoryItems(shift) {
     if (!shift) return [];
     const items = Array.isArray(shift.editHistory) ? [...shift.editHistory] : [];
-    const hasCreation = items.some(it => it && it.changes && it.changes.toLowerCase().includes("original shift"));
+    const hasCreation = items.some(it => it && ((it.action === "created") || (it.changes && it.changes.toLowerCase().includes("original shift"))));
     if (!hasCreation) {
       items.unshift({
         timestamp: shift.createdAt || new Date().toISOString(),
         editorName: shift.authorName || "Associate",
-        changes: "Original shift post created"
+        action: "created",
+        changes: `Original shift posted for ${formatDateHuman(shift.date)} (${formatTime12h(shift.startTime)} – ${formatTime12h(shift.endTime)})`
       });
     }
     return items;
@@ -1454,6 +1593,18 @@
     const dt = new Date(y, m - 1, d);
     return dt.toLocaleDateString("en-US", {
       weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  }
+
+  function formatDateFullHuman(dateKey) {
+    if (!dateKey) return "";
+    const [y, m, d] = dateKey.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString("en-US", {
+      weekday: "long",
       month: "short",
       day: "numeric",
       year: "numeric"
@@ -1477,16 +1628,7 @@
     if (view === "month") {
       return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
     } else {
-      const startOfWeek = getStartOfWeek(date);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      const m1 = startOfWeek.toLocaleDateString("en-US", { month: "short" });
-      const d1 = startOfWeek.getDate();
-      const m2 = endOfWeek.toLocaleDateString("en-US", { month: "short" });
-      const d2 = endOfWeek.getDate();
-      const y = endOfWeek.getFullYear();
-      if (m1 === m2) return `${m1} ${d1} – ${d2}, ${y}`;
-      return `${m1} ${d1} – ${m2} ${d2}, ${y}`;
+      return state.showAllShiftsHistory ? "All Shifts History" : "Available Shifts";
     }
   }
 
@@ -1600,14 +1742,29 @@
   }
 
   function updateCountsAndTitle() {
+    const openCount = state.shifts.filter(s => s && s.status !== "claimed" && !isShiftPast(s)).length;
     const countEl = document.getElementById("open-shifts-count");
     if (countEl) {
-      countEl.textContent = state.shifts.filter(s => s && s.status !== "claimed" && !isShiftPast(s)).length;
+      countEl.textContent = openCount;
     }
 
     const periodTitle = document.getElementById("current-period-title");
-    if (periodTitle) {
-      periodTitle.textContent = formatPeriodTitle(state.activeDate, state.currentView);
+    const dateStepperEl = document.getElementById("calendar-date-stepper");
+    const shiftFilterEl = document.getElementById("shift-filter-wrapper");
+
+    if (state.currentView === "week") {
+      if (dateStepperEl) dateStepperEl.style.display = "none";
+      if (shiftFilterEl) shiftFilterEl.style.display = "inline-flex";
+      if (periodTitle) {
+        periodTitle.textContent = state.showAllShiftsHistory ? "All Shifts History" : "Available Shifts";
+      }
+      updateShiftFilterButtonUI();
+    } else {
+      if (dateStepperEl) dateStepperEl.style.display = "inline-flex";
+      if (shiftFilterEl) shiftFilterEl.style.display = "none";
+      if (periodTitle) {
+        periodTitle.textContent = formatPeriodTitle(state.activeDate, "month");
+      }
     }
     updateHistoryToggleDisplay();
   }
@@ -1885,64 +2042,149 @@
   }
 
   // ==========================================================================
-  // Weekly View
+  // Shift View (All Available Shifts & Grouped Dates)
   // ==========================================================================
-  function populateWeekGrid(grid, dateObj) {
+  function updateShiftFilterButtonUI() {
+    const btn = document.getElementById("btn-shift-filter");
+    const labelEl = document.getElementById("shift-filter-label") || document.getElementById("shift-filter-btn-label");
+    if (!btn || !labelEl) return;
+
+    const isNonDefaultSort = state.shiftSort && state.shiftSort !== "date_asc";
+    btn.classList.toggle("has-active-filter", isNonDefaultSort);
+
+    if (state.shiftSort === "highest_offer") {
+      labelEl.innerHTML = `
+        <svg class="ui-money-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;margin-right:5px;">
+          <path d="M12 21.5C6.8 21.5 4.5 18.2 4.5 14.5C4.5 11 7.2 9 8.8 8C9.6 7.5 10.1 6 10.3 4.5H13.7C13.9 6 14.4 7.5 15.2 8C16.8 9 19.5 11 19.5 14.5C19.5 18.2 17.2 21.5 12 21.5Z" fill="#FBBF24" stroke="#D97706" stroke-width="1.3"/>
+          <path d="M9.2 4.5C9.6 3.2 10.6 2.5 12 2.5C13.4 2.5 14.4 3.2 14.8 4.5H9.2Z" fill="#FCD34D" stroke="#D97706" stroke-width="1.1"/>
+          <path d="M9.5 7.2C11 7.6 13 7.6 14.5 7.2" stroke="#DC2626" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M12 9.8V17.2M10.4 11.2C10.4 10.4 11.1 9.9 12 9.9C12.9 9.9 13.6 10.4 13.6 11.2C13.6 12.6 10.4 12.5 10.4 13.9C10.4 14.7 11.1 15.3 12 15.3C12.9 15.3 13.6 14.8 13.6 14" stroke="#15803D" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>Highest Cash Offers`;
+    } else if (state.shiftSort === "duration_desc") {
+      labelEl.innerHTML = `
+        <svg class="ui-hourglass-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;margin-right:5px;">
+          <rect x="4" y="2" width="16" height="2.5" rx="1.2" fill="#92400E" stroke="#78350F" stroke-width="0.8"/>
+          <rect x="4" y="19.5" width="16" height="2.5" rx="1.2" fill="#92400E" stroke="#78350F" stroke-width="0.8"/>
+          <path d="M6.5 4.5H17.5V7C17.5 8.8 15.8 10.5 14 12C15.8 13.5 17.5 15.2 17.5 17V19.5H6.5V17C6.5 15.2 8.2 13.5 10 12C8.2 10.5 6.5 8.8 6.5 7V4.5Z" fill="#E0F2FE" fill-opacity="0.85" stroke="#38BDF8" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M7.8 7.5H16.2C16.2 8.4 15 9.8 13.5 10.8C12.8 11.3 12 11.5 12 11.5C12 11.5 11.2 11.3 10.5 10.8C9 9.8 7.8 8.4 7.8 7.5Z" fill="#F59E0B"/>
+          <line x1="12" y1="11.5" x2="12" y2="15.5" stroke="#F59E0B" stroke-width="1.3" stroke-linecap="round"/>
+          <path d="M8 19.5H16C16 19 14.5 16.5 12 16.5C9.5 16.5 8 19 8 19.5Z" fill="#F59E0B"/>
+        </svg>Longest Duration`;
+    } else {
+      labelEl.innerHTML = `
+        <svg class="ui-cal-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;margin-right:5px;">
+          <rect x="3" y="4" width="18" height="18" rx="3.5" fill="#FFFFFF" stroke="#60A5FA" stroke-width="1.8"/>
+          <path d="M3 5.5C3 4.39543 3.89543 3.5 5 3.5H19C20.1046 3.5 21 4.39543 21 5.5V9.5H3V5.5Z" fill="#38BDF8"/>
+          <line x1="8" y1="2" x2="8" y2="5.5" stroke="#0284C7" stroke-width="2.2" stroke-linecap="round"/>
+          <line x1="16" y1="2" x2="16" y2="5.5" stroke="#0284C7" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="8" cy="13.5" r="1.3" fill="#38BDF8"/>
+          <circle cx="12" cy="13.5" r="1.3" fill="#38BDF8"/>
+          <circle cx="16" cy="13.5" r="1.3" fill="#38BDF8"/>
+          <circle cx="8" cy="17.5" r="1.3" fill="#38BDF8"/>
+          <circle cx="12" cy="17.5" r="1.3" fill="#38BDF8"/>
+          <circle cx="16" cy="17.5" r="1.3" fill="#38BDF8"/>
+        </svg>Soonest Dates`;
+    }
+  }
+
+  function resetShiftFilters() {
+    state.shiftSort = "date_asc";
+
+    const sortDateRadio = document.querySelector('input[name="shift-sort-radio"][value="date_asc"]');
+    if (sortDateRadio) sortDateRadio.checked = true;
+
+    updateShiftFilterButtonUI();
+    renderWeekView();
+  }
+
+  function populateWeekGrid(grid) {
     if (!grid) return;
     grid.innerHTML = "";
 
-    const startOfWeek = getStartOfWeek(dateObj);
     const todayKey = formatDateKey(new Date());
     const filteredShifts = getFilteredShifts();
-    const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-    for (let i = 0; i < 7; i++) {
-      const curDay = new Date(startOfWeek);
-      curDay.setDate(startOfWeek.getDate() + i);
-      const dateKey = formatDateKey(curDay);
-      const isToday = dateKey === todayKey;
-
-      const column = document.createElement("div");
-      column.className = `week-day-column ${isToday ? "is-today" : ""}`;
-
-      const shortMonth = curDay.toLocaleDateString("en-US", { month: "short" });
-      const shiftsOnDay = filteredShifts.filter(s => s.date === dateKey);
-
-      const colHeader = document.createElement("div");
-      colHeader.className = "week-col-header";
-      colHeader.innerHTML = `
-        <div class="week-col-header-left">
-          <span class="week-col-day-name">${dayNames[i]}</span>
-          <span class="week-col-date-num">${curDay.getDate()}</span>
-          <span class="week-col-month-label">${shortMonth} ${curDay.getDate()}${isToday ? " • Today" : ""}</span>
+    if (filteredShifts.length === 0) {
+      const emptyCard = document.createElement("div");
+      emptyCard.className = "shifts-empty-card";
+      emptyCard.innerHTML = `
+        <div class="empty-palm">🌴</div>
+        <h3>No Shifts Found</h3>
+        <p>There are no shifts currently needing coverage${state.filterMineOnly ? ' matching your filters' : ''}. Check back later or drop a shift below for your Store #438 coworkers!</p>
+        <div class="empty-card-actions" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px;">
+          <button type="button" class="btn-submit-primary" id="btn-empty-shift-post" style="width:auto; padding:10px 20px;">
+            <span>+ Post a Shift</span>
+          </button>
         </div>
-        <button type="button" class="week-col-add-btn" title="Post shift for ${shortMonth} ${curDay.getDate()}">+ Post</button>
       `;
-      colHeader.querySelector(".week-col-add-btn")?.addEventListener("click", (e) => {
+      emptyCard.querySelector("#btn-empty-shift-post")?.addEventListener("click", () => {
+        openPostShiftModal();
+      });
+      grid.appendChild(emptyCard);
+      return;
+    }
+
+    // Sort shifts based on state.shiftSort:
+    const sortedShifts = [...filteredShifts].sort((a, b) => {
+      if (state.shiftSort === "highest_offer") {
+        const amtA = Number(a.offerAmount) || 0;
+        const amtB = Number(b.offerAmount) || 0;
+        if (amtB !== amtA) return amtB - amtA;
+      } else if (state.shiftSort === "duration_desc") {
+        const durA = calculateDurationHours(a.startTime, a.endTime);
+        const durB = calculateDurationHours(b.startTime, b.endTime);
+        if (durB !== durA) return durB - durA;
+      }
+      // Soonest chronological dates:
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return (a.startTime || "").localeCompare(b.startTime || "");
+    });
+
+    // Group shifts by date (Map preserves insertion order)
+    const dateMap = new Map();
+    for (const shift of sortedShifts) {
+      if (!dateMap.has(shift.date)) {
+        dateMap.set(shift.date, []);
+      }
+      dateMap.get(shift.date).push(shift);
+    }
+
+    for (const [dateKey, dayShifts] of dateMap.entries()) {
+      const isToday = dateKey === todayKey;
+      const groupEl = document.createElement("div");
+      groupEl.className = "shifts-date-group";
+
+      const headerEl = document.createElement("div");
+      headerEl.className = "shifts-date-header";
+      headerEl.innerHTML = `
+        <div class="shifts-date-header-left">
+          <span class="shifts-date-icon">
+            <svg class="ui-cal-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="3" ry="3"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </span>
+          <span class="shifts-date-title">${formatDateFullHuman(dateKey)}</span>
+        </div>
+        <button type="button" class="btn-pill-small btn-post-for-date" title="Post a shift for ${formatDateHuman(dateKey)}">+ Post for this day</button>
+      `;
+
+      headerEl.querySelector(".btn-post-for-date")?.addEventListener("click", (e) => {
         e.stopPropagation();
         openPostShiftModal(dateKey);
       });
-      column.appendChild(colHeader);
+      groupEl.appendChild(headerEl);
 
-      const shiftsList = document.createElement("div");
-      shiftsList.className = `week-col-shifts-list ${shiftsOnDay.length === 0 ? "is-empty" : ""}`;
+      const cardsGrid = document.createElement("div");
+      cardsGrid.className = "shifts-group-cards-grid";
+      dayShifts.forEach(shift => {
+        cardsGrid.appendChild(createShiftCardElement(shift, true));
+      });
+      groupEl.appendChild(cardsGrid);
 
-      if (shiftsOnDay.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "week-empty-state";
-        empty.innerHTML = `<span>No shifts posted</span><button type="button" class="btn-pill-small">+ Post</button>`;
-        empty.querySelector("button")?.addEventListener("click", () => {
-          openPostShiftModal(dateKey);
-        });
-        shiftsList.appendChild(empty);
-      } else {
-        shiftsOnDay.forEach(shift => {
-          shiftsList.appendChild(createShiftCardElement(shift, true));
-        });
-      }
-
-      column.appendChild(shiftsList);
-      grid.appendChild(column);
+      grid.appendChild(groupEl);
     }
   }
 
@@ -1950,7 +2192,7 @@
     updateLockedOverlay();
     const grid = document.getElementById("week-columns-grid");
     if (!grid) return;
-    populateWeekGrid(grid, state.activeDate);
+    populateWeekGrid(grid);
   }
 
   // ==========================================================================
@@ -2043,7 +2285,7 @@
         <div class="shift-duration-pill">${duration} hrs</div>
       </div>
 
-      ${shift.notes ? `<p class="shift-card-note">“${escapeHtml(shift.notes)}”</p>` : ""}
+      ${cleanShiftNotes(shift.notes) ? `<p class="shift-card-note">“${escapeHtml(cleanShiftNotes(shift.notes))}”</p>` : ""}
 
       <div class="shift-card-footer">
         <div class="shift-status-indicator">
@@ -2136,9 +2378,10 @@
 
     const notesContainer = document.getElementById("detail-notes-container");
     const notesText = document.getElementById("detail-shift-notes");
-    if (shift.notes && shift.notes.trim()) {
+    const cleanNotes = cleanShiftNotes(shift.notes);
+    if (cleanNotes && cleanNotes.trim()) {
       if (notesContainer) notesContainer.style.display = "flex";
-      if (notesText) notesText.textContent = `“${shift.notes}”`;
+      if (notesText) notesText.textContent = `“${cleanNotes}”`;
     } else {
       if (notesContainer) notesContainer.style.display = "none";
     }
@@ -2273,25 +2516,91 @@
       }
     }
 
-    // Manager Audit Section (Dates & Edit History)
+    // Shift History Section (Original Post Date & Edits to money, time, dates, notes)
     const auditSection = document.getElementById("manager-shift-audit-section");
     const auditHistoryListEl = document.getElementById("manager-audit-history-list");
 
     if (auditSection) {
-      if (state.isAdmin) {
-        auditSection.style.display = "block";
-        if (auditHistoryListEl) {
-          const historyItems = getShiftHistoryItems(shift);
-          auditHistoryListEl.innerHTML = historyItems.map(item => `
-            <div class="manager-history-entry">
-              <span class="history-time">[${formatDateTimeReadable(item.timestamp)}]</span>
-              <strong class="history-editor">${escapeHtml(item.editorName)}:</strong>
-              <span class="history-desc">${escapeHtml(item.changes)}</span>
+      auditSection.style.display = "block";
+      const headerTitle = auditSection.querySelector(".manager-audit-header span");
+      if (headerTitle) {
+        headerTitle.textContent = "Shift History";
+      }
+      if (auditHistoryListEl) {
+        const historyItems = getShiftHistoryItems(shift);
+        const originalPostHtml = `
+          <div class="shift-history-orig-post">
+            <span class="orig-post-icon">
+              <svg class="ui-cal-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="4" width="18" height="18" rx="3.5" fill="#FFFFFF" stroke="#3B82F6" stroke-width="1.8"/>
+                <path d="M3 5.5C3 4.39543 3.89543 3.5 5 3.5H19C20.1046 3.5 21 4.39543 21 5.5V9.5H3V5.5Z" fill="#2563EB"/>
+                <line x1="8" y1="2" x2="8" y2="5.5" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round"/>
+                <line x1="16" y1="2" x2="16" y2="5.5" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round"/>
+                <circle cx="8" cy="13.5" r="1.3" fill="#3B82F6"/>
+                <circle cx="12" cy="13.5" r="1.3" fill="#3B82F6"/>
+                <circle cx="16" cy="13.5" r="1.3" fill="#3B82F6"/>
+                <circle cx="8" cy="17.5" r="1.3" fill="#3B82F6"/>
+                <circle cx="12" cy="17.5" r="1.3" fill="#3B82F6"/>
+                <circle cx="16" cy="17.5" r="1.3" fill="#3B82F6"/>
+              </svg>
+            </span>
+            <div class="orig-post-body">
+              <div class="orig-post-title">Original Post Date</div>
+              <div class="orig-post-date">${formatDateTimeReadable(shift.createdAt)}</div>
+              <div class="orig-post-author">Posted by <strong>${escapeHtml(shift.authorName || "Associate")}</strong></div>
             </div>
-          `).join("");
+          </div>
+        `;
+
+        const editItems = historyItems.filter(item => item && (item.action === "edited" || (item.changes && !item.changes.toLowerCase().includes("original shift"))));
+        let editsHtml = "";
+        if (editItems.length === 0) {
+          editsHtml = `<div class="shift-history-no-edits">✨ No edits have been made to this shift.</div>`;
+        } else {
+          editsHtml = editItems.map(item => {
+            let changesMarkup = "";
+            if (Array.isArray(item.changeList) && item.changeList.length > 0) {
+              changesMarkup = item.changeList.map(c => `
+                <div class="history-change-row">
+                  <span class="history-change-label">${escapeHtml(c.label || "Edit")}:</span>
+                  <span class="history-diff-before">${escapeHtml(c.before)}</span>
+                  <span class="history-diff-arrow">→</span>
+                  <span class="history-diff-after">${escapeHtml(c.after)}</span>
+                </div>
+              `).join("");
+            } else if (item.changes) {
+              const changeParts = String(item.changes).split(/\s*[•;]\s*/);
+              changesMarkup = changeParts.map(part => {
+                const match = part.match(/(.*?)\s*(?:changed from|updated:|from)\s*(.*?)\s*(?:→|->|to)\s*(.*)/i);
+                if (match) {
+                  return `
+                    <div class="history-change-row">
+                      <span class="history-change-label">${escapeHtml(match[1].trim() || "Edit")}:</span>
+                      <span class="history-diff-before">${escapeHtml(match[2].trim())}</span>
+                      <span class="history-diff-arrow">→</span>
+                      <span class="history-diff-after">${escapeHtml(match[3].trim())}</span>
+                    </div>
+                  `;
+                }
+                return `<div class="history-desc">${escapeHtml(part)}</div>`;
+              }).join("");
+            }
+
+            return `
+              <div class="manager-history-entry">
+                <div class="history-entry-header">
+                  <span class="history-editor">👤 ${escapeHtml(item.editorName || "Editor")}</span>
+                  <span class="history-time">${formatDateTimeReadable(item.timestamp)}</span>
+                </div>
+                <div class="history-changes-wrap">
+                  ${changesMarkup}
+                </div>
+              </div>
+            `;
+          }).join("");
         }
-      } else {
-        auditSection.style.display = "none";
+
+        auditHistoryListEl.innerHTML = originalPostHtml + editsHtml;
       }
     }
 
@@ -2341,7 +2650,7 @@
       if (dateInput) dateInput.value = shiftToEdit.date || formatDateKey(new Date());
       if (startTimeInput) startTimeInput.value = shiftToEdit.startTime || "16:00";
       if (endTimeInput) endTimeInput.value = shiftToEdit.endTime || "22:30";
-      if (notesInput) notesInput.value = shiftToEdit.notes || "";
+      if (notesInput) notesInput.value = cleanShiftNotes(shiftToEdit.notes);
       if (offerSlider) offerSlider.value = String(Math.max(0, Math.min(100, parseInt(shiftToEdit.offerAmount || 0, 10) || 0)));
     } else {
       if (modalBadge) modalBadge.textContent = "STORE #438";
@@ -3120,18 +3429,23 @@
         }
       });
 
-      tr.querySelector(".btn-table-action.approve")?.addEventListener("click", (e) => {
+      tr.querySelector(".btn-table-action.approve")?.addEventListener("click", async (e) => {
         e.stopPropagation();
-        assoc.approved = true;
-        if (assoc.device && typeof assoc.device === "object") {
-          assoc.device.approved = true;
-        }
+        const targetEmail = (assoc.email || "").trim().toLowerCase();
+        state.associates.forEach(a => {
+          if (a.id === assoc.id || (targetEmail && a.email && a.email.trim().toLowerCase() === targetEmail)) {
+            a.approved = true;
+            if (a.device && typeof a.device === "object") {
+              a.device.approved = true;
+            }
+          }
+        });
         saveAssociatesRoster(state.associates);
-        upsertAssociateToSupabase(assoc);
+        await upsertAssociateToSupabase(assoc);
         if (
           state.userProfile &&
           (state.userProfile.id === assoc.id ||
-            (state.userProfile.email && assoc.email && state.userProfile.email.toLowerCase() === assoc.email.toLowerCase()))
+            (state.userProfile.email && targetEmail && state.userProfile.email.toLowerCase() === targetEmail))
         ) {
           state.userProfile.approved = true;
           try {
@@ -3510,7 +3824,9 @@
     if (statusEl) {
       const isApproved = state.userProfile.approved !== false;
       statusEl.className = isApproved ? "sheet-approved-pill" : "sheet-pending-pill";
-      statusEl.textContent = isApproved ? "✓ Approved" : "⏳ Pending Approval";
+      statusEl.innerHTML = isApproved
+        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1.5px;margin-right:4px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Approved`
+        : `<svg class="ui-hourglass-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-1.5px;margin-right:4px;"><rect x="4" y="2" width="16" height="2.5" rx="1.2" fill="#92400E" stroke="#78350F" stroke-width="0.8"/><rect x="4" y="19.5" width="16" height="2.5" rx="1.2" fill="#92400E" stroke="#78350F" stroke-width="0.8"/><path d="M6.5 4.5H17.5V7C17.5 8.8 15.8 10.5 14 12C15.8 13.5 17.5 15.2 17.5 17V19.5H6.5V17C6.5 15.2 8.2 13.5 10 12C8.2 10.5 6.5 8.8 6.5 7V4.5Z" fill="#E0F2FE" fill-opacity="0.85" stroke="#38BDF8" stroke-width="1.3" stroke-linejoin="round"/><path d="M7.8 7.5H16.2C16.2 8.4 15 9.8 13.5 10.8C12.8 11.3 12 11.5 12 11.5C12 11.5 11.2 11.3 10.5 10.8C9 9.8 7.8 8.4 7.8 7.5Z" fill="#F59E0B"/><line x1="12" y1="11.5" x2="12" y2="15.5" stroke="#F59E0B" stroke-width="1.3" stroke-linecap="round"/><path d="M8 19.5H16C16 19 14.5 16.5 12 16.5C9.5 16.5 8 19 8 19.5Z" fill="#F59E0B"/></svg>Pending Approval`;
     }
     if (emailEl) emailEl.textContent = state.userProfile.email || "";
 
@@ -3538,7 +3854,7 @@
       if (state.userProfile.isLoggedIn === false) {
         state.userProfile = null;
       } else {
-        syncUserProfileToRoster(state.userProfile);
+        // Do not push stale local profile to Supabase before cloud sync fetches latest manager approvals
         checkExistingAccountPasswordNeeded();
       }
     }
@@ -3604,6 +3920,15 @@
       if (bottomNavWeek) {
         bottomNavWeek.classList.toggle("active", viewName === "week");
         bottomNavWeek.setAttribute("aria-selected", viewName === "week" ? "true" : "false");
+      }
+
+      const dateStepperEl = document.getElementById("calendar-date-stepper") || document.querySelector(".date-stepper");
+      const shiftFilterEl = document.getElementById("shift-filter-wrapper");
+      if (dateStepperEl) {
+        dateStepperEl.style.display = viewName === "month" ? "inline-flex" : "none";
+      }
+      if (shiftFilterEl) {
+        shiftFilterEl.style.display = viewName === "week" ? "inline-flex" : "none";
       }
 
       if (viewName === "month") {
@@ -3727,6 +4052,7 @@
       }
 
       function startDrag(clientX, clientY) {
+        if (state.currentView !== "month") return;
         if (animTimer) {
           finishPendingAnimationImmediately();
         }
@@ -3941,7 +4267,7 @@
     }
 
     attachPeriodSwipeGesture(document.querySelector("#calendar-view .calendar-wrapper"));
-    attachPeriodSwipeGesture(document.getElementById("week-view"));
+    // Shift view does NOT attach horizontal period swipe gesture (per requirement: vertical feed of all shifts, no side-to-side swipe)
 
     document.getElementById("btn-nav-today")?.addEventListener("click", () => {
       playPop();
@@ -3951,6 +4277,51 @@
       updateCountsAndTitle();
       renderCalendarMonth();
       renderWeekView();
+    });
+
+    // Shift View Filter & Sort Dropdown Menu
+    const btnShiftFilter = document.getElementById("btn-shift-filter");
+    const shiftFilterMenu = document.getElementById("shift-filter-menu");
+    const btnResetShiftFilters = document.getElementById("btn-reset-shift-filters");
+
+    function toggleShiftFilterMenu(show) {
+      if (!shiftFilterMenu || !btnShiftFilter) return;
+      const isOpen = shiftFilterMenu.style.display === "block" || shiftFilterMenu.classList.contains("open");
+      const shouldOpen = typeof show === "boolean" ? show : !isOpen;
+      shiftFilterMenu.style.display = shouldOpen ? "block" : "none";
+      shiftFilterMenu.classList.toggle("open", shouldOpen);
+      btnShiftFilter.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+    }
+
+    btnShiftFilter?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      playPop();
+      toggleShiftFilterMenu();
+    });
+
+    // Close filter dropdown if tapped outside
+    document.addEventListener("click", (e) => {
+      if (shiftFilterMenu && (shiftFilterMenu.style.display === "block" || shiftFilterMenu.classList.contains("open"))) {
+        if (!e.target.closest("#shift-filter-wrapper")) {
+          toggleShiftFilterMenu(false);
+        }
+      }
+    });
+
+    // Prevent taps inside the menu from unintentionally bubbling to close
+    shiftFilterMenu?.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    // Shift Sort Radios (Soonest Dates, Highest Cash Offers, Longest Duration)
+    document.querySelectorAll('input[name="shift-sort-radio"]').forEach(radio => {
+      radio.addEventListener("change", (e) => {
+        state.shiftSort = e.target.value;
+        playPop();
+        toggleShiftFilterMenu(false);
+        updateShiftFilterButtonUI();
+        renderWeekView();
+      });
     });
 
     // 3. Brand Logo: Hold 1s to Unlock Manager; Once Logged In, Tap Logo to Open Manager Dashboard
@@ -4943,41 +5314,72 @@
 
       if (existingShift) {
         const changes = [];
-        if (existingShift.date !== dateVal) {
-          changes.push(`Date changed from ${formatDateHuman(existingShift.date)} to ${formatDateHuman(dateVal)}`);
+        const oldDate = existingShift.date;
+        const newDate = dateVal;
+        if (oldDate !== newDate) {
+          changes.push({
+            field: "date",
+            label: "Shift Date",
+            before: formatDateHuman(oldDate),
+            after: formatDateHuman(newDate),
+            summary: `Shift date changed from ${formatDateHuman(oldDate)} → ${formatDateHuman(newDate)}`
+          });
         }
+
+        const oldTime = `${formatTime12h(existingShift.startTime)} – ${formatTime12h(existingShift.endTime)}`;
+        const newTime = `${formatTime12h(startTimeVal)} – ${formatTime12h(endTimeVal)}`;
         if (existingShift.startTime !== startTimeVal || existingShift.endTime !== endTimeVal) {
-          changes.push(`Time changed from ${formatTime12h(existingShift.startTime)} – ${formatTime12h(existingShift.endTime)} to ${formatTime12h(startTimeVal)} – ${formatTime12h(endTimeVal)}`);
+          changes.push({
+            field: "time",
+            label: "Shift Time",
+            before: oldTime,
+            after: newTime,
+            summary: `Shift time changed from ${oldTime} → ${newTime}`
+          });
         }
-        if (Number(existingShift.offerAmount || 0) !== Number(offerVal)) {
-          changes.push(`Offer changed from $${existingShift.offerAmount || 0} to $${offerVal}`);
+
+        const oldOffer = Math.max(0, parseInt(existingShift.offerAmount, 10) || 0);
+        const newOffer = Math.max(0, parseInt(offerVal, 10) || 0);
+        if (oldOffer !== newOffer) {
+          changes.push({
+            field: "offer",
+            label: "Money Offer",
+            before: oldOffer > 0 ? `$${oldOffer}` : "$0",
+            after: newOffer > 0 ? `$${newOffer}` : "$0",
+            summary: `Money offer changed from ${oldOffer > 0 ? `$${oldOffer}` : "$0"} → ${newOffer > 0 ? `$${newOffer}` : "$0"}`
+          });
         }
-        const oldNote = (existingShift.notes || "").trim();
-        const newNote = (notesVal || "").trim();
+
+        const oldNote = cleanShiftNotes(existingShift.notes || "");
+        const newNote = cleanShiftNotes(notesVal || "");
         if (oldNote !== newNote) {
-          if (!oldNote && newNote) {
-            changes.push(`Note added: “${newNote}”`);
-          } else if (oldNote && !newNote) {
-            changes.push(`Note removed (was “${oldNote}”)`);
-          } else {
-            changes.push(`Note changed from “${oldNote}” to “${newNote}”`);
-          }
+          changes.push({
+            field: "notes",
+            label: "Coworker Notes",
+            before: oldNote ? `“${oldNote}”` : "(none)",
+            after: newNote ? `“${newNote}”` : "(none)",
+            summary: `Notes updated: ${oldNote ? `“${oldNote}”` : "(none)"} → ${newNote ? `“${newNote}”` : "(none)"}`
+          });
         }
 
         existingShift.date = dateVal;
         existingShift.startTime = startTimeVal;
         existingShift.endTime = endTimeVal;
-        existingShift.notes = notesVal;
-        existingShift.offerAmount = offerVal;
+        existingShift.notes = cleanShiftNotes(notesVal);
+        existingShift.offerAmount = newOffer;
         existingShift.updatedAt = new Date().toISOString();
 
         existingShift.editHistory = getShiftHistoryItems(existingShift);
         const editor = state.isAdmin ? "Store Manager" : (state.userProfile?.name || "Shift Poster");
-        existingShift.editHistory.push({
-          timestamp: existingShift.updatedAt,
-          editorName: editor,
-          changes: changes.length > 0 ? changes.join(", ") : "Shift details updated"
-        });
+        if (changes.length > 0) {
+          existingShift.editHistory.push({
+            timestamp: existingShift.updatedAt,
+            editorName: editor,
+            action: "edited",
+            changeList: changes,
+            changes: changes.map(c => c.summary).join(" • ")
+          });
+        }
 
         saveShifts(state.shifts);
         upsertShiftToSupabase(existingShift);
@@ -5000,7 +5402,7 @@
         date: dateVal,
         startTime: startTimeVal,
         endTime: endTimeVal,
-        notes: notesVal,
+        notes: cleanShiftNotes(notesVal),
         offerAmount: offerVal,
         status: "open",
         authorId: state.userProfile.id,
@@ -5015,7 +5417,8 @@
           {
             timestamp: nowIso,
             editorName: state.userProfile.name,
-            changes: "Original shift post created"
+            action: "created",
+            changes: `Original shift posted for ${formatDateHuman(dateVal)} (${formatTime12h(startTimeVal)} – ${formatTime12h(endTimeVal)})`
           }
         ]
       };

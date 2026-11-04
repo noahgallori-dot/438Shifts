@@ -16,7 +16,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <link rel="stylesheet" href="styles.css?v=438.65">
+  <link rel="stylesheet" href="styles.css?v=438.76">
   <link rel="icon" type="image/svg+xml"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌴</text></svg>">
   <!-- EmailJS SDK -->
@@ -98,15 +98,17 @@
   <!-- Missing Profile Reminder Alert -->
   <div id="profile-warning-banner" class="profile-warning-banner" style="display: none;">
     <div class="banner-content">
-      <span class="banner-icon" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#FEF3C7" stroke="#D97706" stroke-width="2.2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-          <line x1="12" y1="9" x2="12" y2="13"></line>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-      </span>
-      <span class="banner-text"><strong>Setup Required:</strong> You must set your <strong>Name, Phone & Level (with
-          verified email)</strong> before adding shifts.</span>
+      <div class="banner-message-row">
+        <span class="banner-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#FEF3C7" stroke="#D97706" stroke-width="2.2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </span>
+        <span class="banner-text"><strong>Setup Required:</strong> You must set your <strong>Name, Phone & Level (with
+            verified email)</strong> before adding shifts.</span>
+      </div>
       <button id="btn-banner-setup" class="banner-btn">Complete Profile</button>
     </div>
   </div>
@@ -295,9 +297,9 @@
           </div>
         </div>
 
-        <!-- Shift History Toggle (Available for everyone) -->
-        <button type="button" id="btn-toggle-shift-history" class="btn-manager-history-toggle"
-          title="Toggle all shifts history including past and covered shifts">
+        <!-- Shift History Toggle (Store Manager Only) -->
+        <button type="button" id="btn-toggle-shift-history" class="btn-manager-history-toggle" style="display: none;"
+          title="Manager Action: Toggle all shifts history including past and covered shifts">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
             <path d="M12 8v4l3 3"></path>
             <circle cx="12" cy="12" r="9"></circle>
@@ -458,9 +460,11 @@
           <span id="detail-shift-date" class="time-main">Saturday, Nov 1, 2026</span>
         </div>
         <div class="time-block highlight">
-          <span class="time-sub">SHIFT TIME</span>
+          <div class="time-sub-row">
+            <span class="time-sub">SHIFT TIME</span>
+            <span id="detail-shift-duration" class="duration-chip">6.5 hrs</span>
+          </div>
           <span id="detail-shift-hours" class="time-main">4:00 PM – 10:30 PM</span>
-          <span id="detail-shift-duration" class="duration-chip">6.5 hrs</span>
         </div>
       </div>
 
@@ -479,7 +483,7 @@
             Have an exam."</div>
         </div>
 
-        <div class="info-row">
+        <div class="info-row" id="detail-contact-row">
           <div class="info-label">Phone & Contact</div>
           <div class="phone-action-box">
             <div id="detail-associate-phone" class="phone-number-display">(949) 555-0142</div>
@@ -530,7 +534,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          <span>Cover Shift (Take Down Forever)</span>
+          <span>Shift Covered (Take Down Forever)</span>
         </button>
       </div>
 
@@ -928,7 +932,7 @@
           <p class="step-desc">Set a password (min 4 characters) to secure your account across devices.</p>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom: 1.25rem;">
           <label for="signup-password">Account Password</label>
           <div class="password-input-wrap">
             <input type="password" id="signup-password" placeholder="Create password" minlength="4" required
@@ -943,7 +947,7 @@
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 1.25rem;">
           <label for="signup-password-confirm">Confirm Password</label>
           <div class="password-input-wrap">
             <input type="password" id="signup-password-confirm" placeholder="Confirm password" minlength="4" required
@@ -1128,7 +1132,7 @@
         <div id="manager-password-panel" class="emailjs-config-panel" style="display: none;">
           <div class="config-panel-header">
             <h4>🔑 Change Manager Password</h4>
-            <span class="config-help">Update the password required to unlock Store Manager Mode</span>
+            <span class="config-help">Update the password required to unlock Manager Mode</span>
           </div>
           <div class="config-grid" style="grid-template-columns: repeat(2, 1fr);">
             <div class="config-field">
@@ -1168,7 +1172,7 @@
         <!-- Collapsible EmailJS Configuration Panel for Store Manager -->
         <div id="emailjs-config-panel" class="emailjs-config-panel" style="display: none;">
           <div class="config-panel-header">
-            <h4>⚙️ EmailJS Configuration (Store Manager Settings)</h4>
+            <h4>⚙️ EmailJS Configuration (Manager Settings)</h4>
             <span class="config-help">Update your EmailJS credentials anytime without touching code</span>
           </div>
           <div class="config-grid">
@@ -1272,7 +1276,6 @@
             <select id="edit-assoc-status" required>
               <option value="approved">Approved</option>
               <option value="pending">Pending Approval</option>
-              <option value="logged_out">Logged Out</option>
             </select>
           </div>
         </div>
@@ -1417,10 +1420,10 @@
     </div>
   </div>
 
-  <!-- 10. Change Password Modal -->
+  <!-- 10. Change / Reset Password Modal -->
   <div id="modal-change-password" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card has-back-btn">
-      <button type="button" id="btn-back-change-pwd-modal" class="modal-back-btn" aria-label="Back to menu">
+      <button type="button" id="btn-back-change-pwd-modal" class="modal-back-btn" aria-label="Back to previous menu">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
           stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"></polyline>
@@ -1429,47 +1432,93 @@
       </button>
       <button class="modal-close-btn" data-close-modal aria-label="Close modal">✕</button>
       <div class="modal-header">
-        <div class="modal-badge-tag">ACCOUNT SECURITY</div>
-        <h2 class="modal-title">Change Account Password</h2>
-        <p class="modal-sub">Create and confirm your new account password below.</p>
+        <div class="modal-badge-tag" id="change-pwd-badge">ACCOUNT SECURITY</div>
+        <h2 class="modal-title" id="change-pwd-title">Reset Account Password</h2>
+        <p class="modal-sub" id="change-pwd-sub">Verify your associate email with a 6-digit code to reset your password.</p>
       </div>
 
       <form id="form-change-password" class="modal-form">
-        <input type="hidden" id="change-pwd-email">
-
-        <div class="form-group">
-          <label for="change-pwd-new">New Password (Min 4 chars)</label>
-          <div class="password-input-wrap">
-            <input type="password" id="change-pwd-new" placeholder="Enter new password" minlength="4" required
-              autocomplete="new-password">
-            <button type="button" class="btn-toggle-pwd" data-target="change-pwd-new"
-              aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                aria-hidden="true">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg></button>
+        <!-- Associate Email & 6-Digit Code Verification -->
+        <div class="form-group" id="change-pwd-email-group">
+          <label for="change-pwd-email-input">Associate Email Address</label>
+          <div class="email-input-wrap">
+            <input type="email" id="change-pwd-email-input" placeholder="e.g. coworker@gmail.com" required autocomplete="email">
+            <button type="button" id="btn-change-pwd-send-code" class="btn-send-code">
+              <span>Send 6-Digit Code</span>
+            </button>
+          </div>
+          <div id="change-pwd-verified-chip" class="email-verified-chip" style="display: none; margin-top: 0.5rem;">
+            ✅ Email Confirmed & Verified
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="change-pwd-confirm">Confirm New Password</label>
-          <div class="password-input-wrap">
-            <input type="password" id="change-pwd-confirm" placeholder="Confirm new password" minlength="4" required
-              autocomplete="new-password">
-            <button type="button" class="btn-toggle-pwd" data-target="change-pwd-confirm"
-              aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                aria-hidden="true">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg></button>
+        <!-- Email Error Alert (with Quick Code bypass) -->
+        <div id="change-pwd-error-alert" class="email-error-alert" style="display: none;">
+          <div class="alert-header">
+            <span class="err-icon">⚠️</span>
+            <span id="change-pwd-error-msg">Could not send verification email.</span>
+          </div>
+          <div class="alert-desc">
+            If your email code is delayed, use the generated code below to verify immediately:
+          </div>
+          <button type="button" id="btn-change-pwd-quick-code" class="btn-quick-code">
+            ⚡ Auto-Fill Code (<span id="change-pwd-quick-display">123456</span>)
+          </button>
+        </div>
+
+        <!-- 6-digit Code Entry Box (Shown after sending code) -->
+        <div id="change-pwd-code-group" class="verification-code-group" style="display: none;">
+          <div class="verify-code-box">
+            <div class="verify-header">
+              <span>Enter 6-Digit Code sent to your email:</span>
+              <button type="button" id="btn-change-pwd-resend-code" class="btn-mini-text">Resend</button>
+            </div>
+            <div class="code-action-row">
+              <input type="text" id="change-pwd-code-input" class="code-input" maxlength="6" placeholder="123456" inputmode="numeric">
+              <button type="button" id="btn-change-pwd-verify-code" class="btn-verify-submit">
+                <span>Confirm Code</span>
+              </button>
+            </div>
+            <span class="code-help-text">Check your inbox or spam folder for the verification code.</span>
           </div>
         </div>
 
-        <button type="submit" id="btn-submit-change-pwd" class="btn-submit-primary">
-          <span>Update Password</span>
-        </button>
+        <!-- Password Inputs & Submit (Unlocked after email is verified) -->
+        <div id="change-pwd-fields-wrap" style="display: none;">
+          <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 1.25rem;">
+            <label for="change-pwd-new">New Password (Min 4 chars)</label>
+            <div class="password-input-wrap">
+              <input type="password" id="change-pwd-new" placeholder="Enter new password" minlength="4"
+                autocomplete="new-password">
+              <button type="button" class="btn-toggle-pwd" data-target="change-pwd-new"
+                aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg></button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="change-pwd-confirm">Confirm New Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="change-pwd-confirm" placeholder="Confirm new password" minlength="4"
+                autocomplete="new-password">
+              <button type="button" class="btn-toggle-pwd" data-target="change-pwd-confirm"
+                aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg></button>
+            </div>
+          </div>
+
+          <button type="submit" id="btn-submit-change-pwd" class="btn-submit-primary" style="margin-top: 1.25rem;">
+            <span>Save New Password</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -1525,7 +1574,7 @@
   <!-- Confetti Canvas -->
   <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
 
-  <script src="app.js?v=438.65"></script>
+  <script src="app.js?v=438.76"></script>
 </body>
 
 </html>

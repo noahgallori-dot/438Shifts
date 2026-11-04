@@ -468,13 +468,22 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 0.65rem;
   font-size: 0.85rem;
   color: #92400E;
 }
 
+.banner-message-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 1;
+}
+
 .banner-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   font-size: 1.1rem;
 }
 
@@ -706,7 +715,7 @@ body::before {
   align-items: center;
   gap: 0.55rem;
   padding: 0.4rem 0.5rem;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s ease;
   user-select: none;
@@ -751,6 +760,8 @@ body::before {
 .shift-filter-wrapper {
   position: relative;
   display: inline-flex;
+  width: auto;
+  justify-self: start;
 }
 
 .shift-filter-btn {
@@ -787,13 +798,13 @@ body::before {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  min-width: 270px;
-  max-width: 320px;
+  min-width: 215px;
+  max-width: 236px;
   background: #FFFFFF;
   border: 1.5px solid var(--surface-border);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
-  padding: 0.65rem;
+  padding: 0.55rem;
   z-index: 100;
   animation: dropDownSlide 0.18s ease-out;
 }
@@ -837,8 +848,8 @@ body::before {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.35rem 0.45rem;
-  border-radius: var(--radius-xs);
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease;
@@ -1841,23 +1852,23 @@ body::before {
   bottom: 0;
   width: 100%;
   max-width: 100vw;
-  background: rgba(15, 23, 42, 0.58);
+  background: rgba(15, 23, 42, 0.72);
   z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
   opacity: 0;
-  visibility: hidden;
+  pointer-events: none;
   overflow-x: hidden;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  transition: opacity 0.16s ease-out, visibility 0.16s ease-out;
+  transition: opacity 0.22s ease-out;
 }
 
 .modal-backdrop.active {
   opacity: 1;
-  visibility: visible;
+  pointer-events: auto;
 }
 
 .modal-card {
@@ -1952,6 +1963,9 @@ body::before {
 
 .modal-badge-tag {
   display: inline-block;
+  width: fit-content;
+  max-width: fit-content;
+  align-self: flex-start;
   background: var(--primary-gold-light);
   color: #7B5200;
   border: 1px solid var(--primary-gold);
@@ -1982,6 +1996,17 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
+}
+
+#form-change-password,
+#form-confirm-password {
+  gap: 1.35rem;
+}
+
+#form-change-password .form-group + .form-group,
+#form-confirm-password .form-group + .form-group,
+.config-field + .config-field {
+  margin-top: 0.35rem;
 }
 
 .form-group {
@@ -2042,7 +2067,17 @@ input::-webkit-date-and-time-value {
   text-align: inherit;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C81912' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3' ry='3'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 18px 18px;
+  width: 22px;
+  height: 22px;
+  opacity: 1;
+}
+
 input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
   padding: 0;
@@ -2424,6 +2459,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .verification-code-group {
+  margin-top: 0.85rem;
   background: #FFFDF9;
   border: 1.5px dashed var(--primary-gold);
   border-radius: var(--radius-md);
@@ -2876,6 +2912,52 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   height: 100%;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#modal-edit-associate {
+  z-index: 250;
+}
+
+/* Avatar photo protection: no dragging, holding down, or opening in new tab */
+.associate-avatar-lg img,
+.user-avatar-small img,
+.user-avatar-large img,
+.shift-card-avatar img,
+.preview-avatar-circle img {
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.blurred-avatar,
+.blurred-avatar img,
+.blurred-avatar svg,
+.shift-card-avatar.blurred-avatar {
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.shift-avatar-circle svg,
+.table-user-avatar svg,
+.user-avatar-small svg,
+.user-avatar-large svg,
+.shift-card-avatar svg,
+.preview-avatar-circle svg,
+.avatar-circle-lg svg,
+.avatar-preset-btn svg {
+  display: block;
+  margin: auto;
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .sheet-approved-pill {
@@ -2928,7 +3010,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .btn-table-action {
-  padding: 0.28rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.55rem;
   border-radius: var(--radius-sm);
   font-family: 'Space Grotesk', sans-serif;
   font-size: 0.72rem;
@@ -2938,6 +3023,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   background: #FFFFFF;
   color: var(--text-main);
   transition: var(--trans-fast);
+  white-space: nowrap;
 }
 
 .btn-table-action:hover {
@@ -3127,16 +3213,24 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   color: var(--primary-red);
 }
 
+.time-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
 .duration-chip {
-  align-self: flex-start;
+  display: inline-block;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
   background: var(--primary-red);
   color: #FFFFFF;
   padding: 1px 6px;
   border-radius: var(--radius-full);
-  margin-top: 0.2rem;
+  margin-top: 0;
+  line-height: 1.2;
 }
 
 .shift-details-body {
@@ -3413,6 +3507,41 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   border-color: #B91C1C;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+
+.btn-manager-delete-assoc {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-full);
+  background: #FFF1F2;
+  color: #DC2626;
+  border: 1.5px solid #FCA5A5;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: var(--trans-spring);
+  margin-top: 0.75rem;
+}
+
+.btn-manager-delete-assoc:hover {
+  background: #DC2626;
+  color: #FFFFFF;
+  border-color: #B91C1C;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+
+.google-sheet-table tr.manager-roster-row {
+  cursor: pointer;
+}
+
+.google-sheet-table tr.manager-roster-row:hover td {
+  background: #F0FDF4;
 }
 
 .btn-text-danger {
@@ -3983,6 +4112,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     justify-self: start;
   }
 
+  .shift-filter-wrapper {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    width: auto;
+  }
+
   .view-switcher {
     display: none !important;
   }
@@ -4248,6 +4384,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     padding: 0;
     width: 100%;
     max-width: 100vw;
+    background: rgba(15, 23, 42, 0.72);
     overflow-x: hidden !important;
     touch-action: pan-y;
   }
@@ -4799,7 +4936,7 @@ html.user-logged-in #shifts-locked-overlay {
 
 .signup-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-red) 0%, var(--primary-gold) 100%);
+  background: var(--primary-red);
   border-radius: 999px;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }

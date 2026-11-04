@@ -73,10 +73,23 @@
   const SVG_EYE_SHOW = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
   const SVG_EYE_HIDE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
+  const PRESET_CREW_ICONS = ["👨‍🍳", "🧢", "👩‍🍳", "🌟", "🍔", "🌴", "🍟", "🥤"];
+
+  function getFallbackPresetIcon(seed) {
+    if (!seed) return "👨‍🍳";
+    const str = String(seed);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return PRESET_CREW_ICONS[Math.abs(hash) % PRESET_CREW_ICONS.length];
+  }
+
   function renderAvatarMarkup(avatar, altText = "Avatar") {
     if (!avatar) return VECTOR_AVATARS["👨‍🍳"];
-    if (avatar.startsWith("data:image")) {
-      return `<img src="${avatar}" alt="${altText}">`;
+    if (avatar.startsWith("data:image") || avatar.startsWith("http")) {
+      return `<img src="${avatar}" alt="${altText}" draggable="false" oncontextmenu="return false;" style="pointer-events: none; -webkit-touch-callout: none; user-select: none;">`;
     }
     return VECTOR_AVATARS[avatar] || VECTOR_AVATARS["👨‍🍳"];
   }
@@ -1712,15 +1725,20 @@
     const btn = document.getElementById("btn-toggle-shift-history");
     const label = document.getElementById("label-toggle-shift-history");
     if (!btn) return;
+    if (!state.isAdmin) {
+      btn.style.display = "none";
+      state.showAllShiftsHistory = false;
+      return;
+    }
     btn.style.display = "inline-flex";
     if (state.showAllShiftsHistory) {
       btn.classList.add("active");
       if (label) label.textContent = "Showing All History";
-      btn.title = "Showing all shifts including past and covered shifts. Click to view active only.";
+      btn.title = "Store Manager: Showing all shifts including past and covered shifts. Click to view active only.";
     } else {
       btn.classList.remove("active");
       if (label) label.textContent = "Show All History";
-      btn.title = "Click to show all shift history including past dates and shifts that were covered.";
+      btn.title = "Store Manager: Click to show all shift history including past dates and shifts that were covered.";
     }
   }
 
@@ -2239,7 +2257,11 @@
     }
 
     const duration = calculateDurationHours(shift.startTime, shift.endTime);
-    const avatarMarkup = renderAvatarMarkup(resolveShiftAvatar(shift), canView ? shift.authorName : "Associate");
+    let shiftAvatar = resolveShiftAvatar(shift);
+    if (!canView && (String(shiftAvatar).startsWith("data:image") || String(shiftAvatar).startsWith("http"))) {
+      shiftAvatar = getFallbackPresetIcon(shift.authorId || shift.authorName || shift.id);
+    }
+    const avatarMarkup = renderAvatarMarkup(shiftAvatar, canView ? shift.authorName : "Associate");
 
     const badgeLabel = `Level ${shift.authorLevel}`;
     const isMine = isShiftOwner(shift);
@@ -2372,7 +2394,12 @@
     }
 
     const nameEl = document.getElementById("detail-associate-name");
-    if (nameEl) nameEl.textContent = shift.authorName;
+    if (nameEl) {
+      nameEl.textContent = shift.authorName;
+      nameEl.style.cursor = "default";
+      nameEl.title = "";
+      nameEl.onclick = null;
+    }
 
     const pill = document.getElementById("detail-level-pill");
     if (pill) pill.textContent = `Level ${shift.authorLevel}`;
@@ -2488,6 +2515,11 @@
 
     // ONLY the person who posted the shift (or Manager) can edit it; ONLY the poster can mark as "Cover Shift"
     const isMine = isShiftOwner(shift);
+    const contactRow = document.getElementById("detail-contact-row");
+    if (contactRow) {
+      contactRow.style.display = isMine ? "none" : "flex";
+    }
+
     const editShiftBtn = document.getElementById("btn-edit-shift");
     if (editShiftBtn) {
       editShiftBtn.style.display = (isMine || state.isAdmin) && !isClaimed ? "inline-flex" : "none";
@@ -2497,28 +2529,35 @@
       coveredBtn.style.display = isMine && !isClaimed && !isPassed ? "inline-flex" : "none";
     }
 
-    // If shift has passed or claimed, disable call/sms for non-managers
-    if (isPassed && !state.isAdmin) {
-      if (callBtn) {
-        callBtn.style.pointerEvents = "none";
-        callBtn.style.opacity = "0.5";
-        callBtn.title = "Shift has passed";
-      }
-      if (smsBtn) {
-        smsBtn.style.pointerEvents = "none";
-        smsBtn.style.opacity = "0.5";
-        smsBtn.title = "Shift has passed";
-      }
+    // Hide direct contact (call/text/prompt) when viewing own posted shift
+    if (isMine) {
+      if (callBtn) callBtn.style.display = "none";
+      if (smsBtn) smsBtn.style.display = "none";
+      if (loginPromptBtn) loginPromptBtn.style.display = "none";
     } else {
-      if (callBtn) {
-        callBtn.style.pointerEvents = "auto";
-        callBtn.style.opacity = "1";
-        callBtn.title = "";
-      }
-      if (smsBtn) {
-        smsBtn.style.pointerEvents = "auto";
-        smsBtn.style.opacity = "1";
-        smsBtn.title = "";
+      // If shift has passed or claimed, disable call/sms for non-managers
+      if (isPassed && !state.isAdmin) {
+        if (callBtn) {
+          callBtn.style.pointerEvents = "none";
+          callBtn.style.opacity = "0.5";
+          callBtn.title = "Shift has passed";
+        }
+        if (smsBtn) {
+          smsBtn.style.pointerEvents = "none";
+          smsBtn.style.opacity = "0.5";
+          smsBtn.title = "Shift has passed";
+        }
+      } else {
+        if (callBtn) {
+          callBtn.style.pointerEvents = "auto";
+          callBtn.style.opacity = "1";
+          callBtn.title = "";
+        }
+        if (smsBtn) {
+          smsBtn.style.pointerEvents = "auto";
+          smsBtn.style.opacity = "1";
+          smsBtn.title = "";
+        }
       }
     }
 
@@ -2534,38 +2573,37 @@
       }
     }
 
-    // Shift History Section (Original Post Date & Edits to money, time, dates, notes)
+    // Shift History Section (Original Post Date & Edits to money, time, dates, notes) - Manager Only
     const auditSection = document.getElementById("manager-shift-audit-section");
     const auditHistoryListEl = document.getElementById("manager-audit-history-list");
 
     if (auditSection) {
-      auditSection.style.display = "block";
+      auditSection.style.display = state.isAdmin ? "block" : "none";
       const headerTitle = auditSection.querySelector(".manager-audit-header span");
       if (headerTitle) {
         headerTitle.textContent = "Shift History";
       }
-      if (auditHistoryListEl) {
+      if (auditHistoryListEl && state.isAdmin) {
         const historyItems = getShiftHistoryItems(shift);
         const originalPostHtml = `
           <div class="shift-history-orig-post">
             <span class="orig-post-icon">
               <svg class="ui-cal-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="4" width="18" height="18" rx="3.5" fill="#FFFFFF" stroke="#3B82F6" stroke-width="1.8"/>
-                <path d="M3 5.5C3 4.39543 3.89543 3.5 5 3.5H19C20.1046 3.5 21 4.39543 21 5.5V9.5H3V5.5Z" fill="#2563EB"/>
-                <line x1="8" y1="2" x2="8" y2="5.5" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round"/>
-                <line x1="16" y1="2" x2="16" y2="5.5" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round"/>
-                <circle cx="8" cy="13.5" r="1.3" fill="#3B82F6"/>
-                <circle cx="12" cy="13.5" r="1.3" fill="#3B82F6"/>
-                <circle cx="16" cy="13.5" r="1.3" fill="#3B82F6"/>
-                <circle cx="8" cy="17.5" r="1.3" fill="#3B82F6"/>
-                <circle cx="12" cy="17.5" r="1.3" fill="#3B82F6"/>
-                <circle cx="16" cy="17.5" r="1.3" fill="#3B82F6"/>
+                <rect x="3" y="4" width="18" height="18" rx="3.5" fill="#FFFFFF" stroke="#C81912" stroke-width="1.8"/>
+                <path d="M3 5.5C3 4.39543 3.89543 3.5 5 3.5H19C20.1046 3.5 21 4.39543 21 5.5V9.5H3V5.5Z" fill="#C81912"/>
+                <line x1="8" y1="2" x2="8" y2="5.5" stroke="#991B1B" stroke-width="2.2" stroke-linecap="round"/>
+                <line x1="16" y1="2" x2="16" y2="5.5" stroke="#991B1B" stroke-width="2.2" stroke-linecap="round"/>
+                <circle cx="8" cy="13.5" r="1.3" fill="#C81912"/>
+                <circle cx="12" cy="13.5" r="1.3" fill="#C81912"/>
+                <circle cx="16" cy="13.5" r="1.3" fill="#C81912"/>
+                <circle cx="8" cy="17.5" r="1.3" fill="#C81912"/>
+                <circle cx="12" cy="17.5" r="1.3" fill="#C81912"/>
+                <circle cx="16" cy="17.5" r="1.3" fill="#C81912"/>
               </svg>
             </span>
             <div class="orig-post-body">
               <div class="orig-post-title">Original Post Date</div>
               <div class="orig-post-date">${formatDateTimeReadable(shift.createdAt)}</div>
-              <div class="orig-post-author">Posted by <strong>${escapeHtml(shift.authorName || "Associate")}</strong></div>
             </div>
           </div>
         `;
@@ -3290,13 +3328,7 @@
     if (passwordInput) passwordInput.value = assoc.password || "";
     if (levelSelect) levelSelect.value = String(assoc.level || 1);
     if (statusSelect) {
-      if (assoc.approved === false) {
-        statusSelect.value = "pending";
-      } else if (assoc.isLoggedIn === false || (assoc.device && assoc.device.isLoggedIn === false)) {
-        statusSelect.value = "logged_out";
-      } else {
-        statusSelect.value = "approved";
-      }
+      statusSelect.value = assoc.approved === false ? "pending" : "approved";
     }
 
     openModal(modal);
@@ -3364,9 +3396,8 @@
     associates.forEach((assoc, idx) => {
       const tr = document.createElement("tr");
       const isApproved = assoc.approved !== false;
-      if (!isApproved) {
-        tr.className = "row-needs-approval";
-      }
+      tr.className = `manager-roster-row ${!isApproved ? 'row-needs-approval' : ''}`;
+      tr.title = `Click anywhere to edit ${assoc.name}`;
 
       const avatarMarkup = renderAvatarMarkup(assoc.avatar, assoc.name);
       const shiftsPosted = getShiftsCountForAssociate(assoc);
@@ -3416,12 +3447,33 @@
         <td class="mono-cell">${formatDateTimeReadable(assoc.joinedAt)}</td>
         <td>
           <div class="table-actions-wrap">
-            ${!isApproved ? `<button type="button" class="btn-table-action approve" data-assoc-id="${assoc.id}" title="Approve account request">✓ Approve</button>` : ""}
-            <button type="button" class="btn-table-action edit" data-assoc-id="${assoc.id}" title="Edit associate info">Edit</button>
-            <button type="button" class="btn-table-action remove" data-assoc-id="${assoc.id}" title="Remove associate">Remove</button>
+            ${!isApproved ? `
+              <button type="button" class="btn-table-action approve" data-assoc-id="${assoc.id}" title="Approve account request">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>Approve
+              </button>` : ""}
+            <button type="button" class="btn-table-action edit" data-assoc-id="${assoc.id}" title="Edit associate info">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>Edit
+            </button>
+            <button type="button" class="btn-table-action remove" data-assoc-id="${assoc.id}" title="Remove associate and their shifts">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>Remove
+            </button>
           </div>
         </td>
       `;
+
+      // Clicking anywhere on their line opens the Edit Associate modal
+      tr.addEventListener("click", () => {
+        playPop();
+        openEditAssociateModal(assoc);
+      });
 
       // Password Eye Reveal Toggle
       tr.querySelector(".btn-roster-pwd-toggle")?.addEventListener("click", (e) => {
@@ -3485,7 +3537,33 @@
 
       tr.querySelector(".btn-table-action.remove")?.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (confirm(`Remove associate ${assoc.name} from Store #438 directory? This will remove their account, log them out, and unverify their email.`)) {
+        const assocName = assoc.name || "Associate";
+        const shiftsToRemove = state.shifts.filter(s => {
+          if (!s) return false;
+          if (assoc.id && s.authorId && s.authorId === assoc.id) return true;
+          if (assoc.email && s.authorEmail && s.authorEmail.trim().toLowerCase() === assoc.email.trim().toLowerCase()) return true;
+          if (assoc.name && s.authorName && s.authorName.trim().toLowerCase() === assoc.name.trim().toLowerCase()) return true;
+          return false;
+        });
+
+        const shiftCountMsg = shiftsToRemove.length > 0
+          ? ` and permanently delete their ${shiftsToRemove.length} posted shift(s)`
+          : "";
+
+        if (confirm(`Remove associate ${assocName} from Store #438 directory? This will remove their account${shiftCountMsg}, log them out, and unverify their email.`)) {
+          // 1. Remove all shifts posted by this associate from Supabase and local storage/state
+          for (const s of shiftsToRemove) {
+            deleteShiftFromSupabase(s.id);
+          }
+          if (shiftsToRemove.length > 0) {
+            const removedIds = new Set(shiftsToRemove.map(s => s.id));
+            state.shifts = state.shifts.filter(s => !removedIds.has(s.id));
+            saveShifts(state.shifts);
+            renderShifts();
+            renderCalendar();
+          }
+
+          // 2. Remove associate from state & Supabase
           state.associates = state.associates.filter(a => a.id !== assoc.id);
           saveAssociatesRoster(state.associates);
           deleteAssociateFromSupabase(assoc.id);
@@ -3499,7 +3577,12 @@
             forceLogoutRemovedUser();
           }
 
-          showToast(`Associate ${assoc.name} removed & logged out`, "default");
+          showToast(
+            shiftsToRemove.length > 0
+              ? `Associate ${assocName} & ${shiftsToRemove.length} shift(s) removed`
+              : `Associate ${assocName} removed & logged out`,
+            "default"
+          );
           renderManagerHub(filterText);
         }
       });
@@ -3604,6 +3687,12 @@
     closeAllDropdowns();
     document.querySelectorAll(".modal-backdrop.active").forEach(other => {
       if (other !== modalEl) {
+        if (modalEl.id === "modal-edit-associate" && other.id === "modal-manager-hub") {
+          return; // Keep manager dashboard open underneath!
+        }
+        if (modalEl.id === "modal-crop-photo" && (other.id === "modal-profile" || other.id === "modal-signup")) {
+          return; // Keep parent open underneath!
+        }
         other.classList.remove("active");
         other.setAttribute("aria-hidden", "true");
         other.style.transition = "none";
@@ -3735,6 +3824,7 @@
     signupState.step = 1;
     signupState.email = "";
     signupState.emailVerified = false;
+    state.pendingVerification = null;
     signupState.firstName = "";
     signupState.lastName = "";
     signupState.phone = "";
@@ -3829,23 +3919,74 @@
     openModal(modal);
   }
 
-  function openChangePasswordModal(prefilledEmail = "") {
+  const changePwdState = {
+    email: "",
+    verified: false,
+    isForgot: false
+  };
+
+  function openChangePasswordModal(prefilledEmail = "", isForgotMode = false) {
     const modal = document.getElementById("modal-change-password");
-    const emailInput = document.getElementById("change-pwd-email");
+    if (!modal) return;
+
+    const titleEl = document.getElementById("change-pwd-title");
+    const subEl = document.getElementById("change-pwd-sub");
+    const emailInput = document.getElementById("change-pwd-email-input");
+    const btnSendCode = document.getElementById("btn-change-pwd-send-code");
+    const verifiedChip = document.getElementById("change-pwd-verified-chip");
+    const codeGroup = document.getElementById("change-pwd-code-group");
+    const codeInput = document.getElementById("change-pwd-code-input");
+    const errorAlert = document.getElementById("change-pwd-error-alert");
+    const fieldsWrap = document.getElementById("change-pwd-fields-wrap");
     const passNew = document.getElementById("change-pwd-new");
     const passConfirm = document.getElementById("change-pwd-confirm");
 
     if (passNew) passNew.value = "";
     if (passConfirm) passConfirm.value = "";
+    if (codeInput) codeInput.value = "";
+    if (codeGroup) codeGroup.style.display = "none";
+    if (errorAlert) errorAlert.style.display = "none";
 
-    const targetEmail = (state.userProfile && state.userProfile.email)
-      ? state.userProfile.email
-      : (prefilledEmail || "");
+    const isUserActive = isUserLoggedIn() && state.userProfile?.email;
+    const isForgot = isForgotMode || !isUserActive;
+    changePwdState.isForgot = isForgot;
 
-    if (emailInput) {
-      emailInput.value = targetEmail;
-      emailInput.setAttribute("data-locked-email", targetEmail.toLowerCase());
+    if (isForgot) {
+      // Forgot Password flow -> Requires email verification
+      const targetEmail = prefilledEmail || (state.userProfile?.email || "");
+      changePwdState.email = targetEmail.toLowerCase();
+      changePwdState.verified = false;
+
+      if (titleEl) titleEl.textContent = "Reset Account Password";
+      if (subEl) subEl.textContent = "Verify your associate email with a 6-digit code to reset your password.";
+      if (emailInput) {
+        emailInput.value = targetEmail;
+        emailInput.disabled = false;
+      }
+      if (btnSendCode) {
+        btnSendCode.style.display = "inline-flex";
+        btnSendCode.disabled = false;
+        btnSendCode.innerHTML = "<span>Send 6-Digit Code</span>";
+      }
+      if (verifiedChip) verifiedChip.style.display = "none";
+      if (fieldsWrap) fieldsWrap.style.display = "none";
+    } else {
+      // Authenticated User Change Password flow -> Already logged in & verified
+      const targetEmail = state.userProfile.email;
+      changePwdState.email = targetEmail.toLowerCase();
+      changePwdState.verified = true;
+
+      if (titleEl) titleEl.textContent = "Change Account Password";
+      if (subEl) subEl.textContent = "Enter and confirm your new account password below.";
+      if (emailInput) {
+        emailInput.value = targetEmail;
+        emailInput.disabled = true;
+      }
+      if (btnSendCode) btnSendCode.style.display = "none";
+      if (verifiedChip) verifiedChip.style.display = "block";
+      if (fieldsWrap) fieldsWrap.style.display = "block";
     }
+
     openModal(modal);
   }
 
@@ -4498,14 +4639,18 @@
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
     });
 
-    // Shift History Toggle (Available for everyone)
+    // Shift History Toggle (Store Manager Only)
     document.getElementById("btn-toggle-shift-history")?.addEventListener("click", () => {
+      if (!state.isAdmin) {
+        showToast("Shift history is only accessible in Store Manager mode.", "error");
+        return;
+      }
       playPop();
       state.showAllShiftsHistory = !state.showAllShiftsHistory;
       updateHistoryToggleDisplay();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
       if (state.showAllShiftsHistory) {
-        showToast("Showing all shift history (including past & covered shifts)", "default");
+        showToast("Store Manager: Showing all shift history (including past & covered)", "default");
       } else {
         showToast("Showing active shifts only", "default");
       }
@@ -4815,7 +4960,7 @@
     });
 
     // Unified Dropdown Management:
-    // Only one dropdown can be open at a time; clicking or tapping anywhere outside closes all dropdowns.
+    // Only one dropdown can be open at a time; clicking anywhere besides the pill or list immediately closes it.
     const handleOutsideDropdownClick = (e) => {
       const isShiftOpen = shiftFilterMenu && (shiftFilterMenu.style.display === "block" || shiftFilterMenu.classList.contains("open"));
       const isLevelOpen = levelDropdownMenu && (levelDropdownMenu.style.display === "block" || levelDropdownMenu.classList.contains("open"));
@@ -4828,15 +4973,21 @@
         return;
       }
 
-      const inShift = Boolean(targetEl.closest("#shift-filter-wrapper") || (shiftFilterWrapper && shiftFilterWrapper.contains(targetEl)));
-      const inLevel = Boolean(targetEl.closest(".level-dropdown-wrapper") || (levelDropdownWrapper && levelDropdownWrapper.contains(targetEl)));
+      const inShiftPill = Boolean(targetEl.closest("#btn-shift-filter"));
+      const inShiftList = Boolean(targetEl.closest("#shift-filter-menu"));
+      const inLevelPill = Boolean(targetEl.closest("#btn-level-dropdown"));
+      const inLevelList = Boolean(targetEl.closest("#level-dropdown-menu"));
 
-      if (!inShift && !inLevel) {
-        closeAllDropdowns();
-      } else if (inShift && !inLevel) {
-        closeAllDropdowns("shift-filter-menu");
-      } else if (inLevel && !inShift) {
-        closeAllDropdowns("level-dropdown-menu");
+      if (isShiftOpen && !inShiftPill && !inShiftList) {
+        shiftFilterMenu.style.display = "none";
+        shiftFilterMenu.classList.remove("open");
+        btnShiftFilter?.setAttribute("aria-expanded", "false");
+      }
+
+      if (isLevelOpen && !inLevelPill && !inLevelList) {
+        levelDropdownMenu.style.display = "none";
+        levelDropdownMenu.classList.remove("open");
+        btnLevelDropdown?.setAttribute("aria-expanded", "false");
       }
     };
 
@@ -5194,8 +5345,6 @@
             updateProfileAvatarPreview(existingAssociate.avatar);
           }
           showToast(`Welcome back, ${existingAssociate.name}! Restored your profile from cloud.`, "success");
-        } else {
-          showToast("Email verified! Your profile is automatically saved.", "success");
         }
 
         const verifiedChip = document.getElementById("email-verified-chip");
@@ -5744,13 +5893,8 @@
     document.getElementById("btn-login-forgot-pwd")?.addEventListener("click", () => {
       playPop();
       const email = document.getElementById("login-email")?.value.trim() || "";
-      if (!email) {
-        showToast("Please enter your associate email address in the box above first!", "error");
-        document.getElementById("login-email")?.focus();
-        return;
-      }
       closeModal(document.getElementById("modal-login"));
-      openChangePasswordModal(email);
+      openChangePasswordModal(email, true);
     });
 
     // 18. Confirm Password Form Submit (For existing associates without a password)
@@ -5807,18 +5951,165 @@
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
     });
 
-    // 19. Change Password (Direct Email + Password Update without email confirmation)
+    // 19. Change / Reset Password (Email Verification via 6-Digit Code)
+    async function handleSendChangePwdCode() {
+      const emailInput = document.getElementById("change-pwd-email-input");
+      const btnSend = document.getElementById("btn-change-pwd-send-code");
+      const codeGroup = document.getElementById("change-pwd-code-group");
+      const errorAlert = document.getElementById("change-pwd-error-alert");
+      const errorMsg = document.getElementById("change-pwd-error-msg");
+      const quickDisplay = document.getElementById("change-pwd-quick-display");
+      const email = emailInput?.value.trim().toLowerCase();
+
+      if (!email || !email.includes("@")) {
+        showToast("Please enter a valid associate email address!", "error");
+        emailInput?.focus();
+        return;
+      }
+
+      // Check if an associate account exists for this email
+      let assoc = state.associates.find(
+        a => a.email && a.email.trim().toLowerCase() === email
+      );
+
+      if (!assoc) {
+        try {
+          const res = await fetch(`${SUPABASE_REST_URL}/associates?email=ilike.${encodeURIComponent(email)}&select=*`, {
+            method: "GET",
+            headers: getSupabaseHeaders()
+          });
+          if (res.ok) {
+            const rows = await res.json();
+            if (Array.isArray(rows) && rows.length > 0) {
+              assoc = mapDbRowToAssociate(rows[0]);
+              state.associates.push(assoc);
+            }
+          }
+        } catch (err) { }
+      }
+
+      if (!assoc) {
+        showToast("No associate account found for that email address. Please sign up!", "error");
+        return;
+      }
+
+      if (btnSend) {
+        btnSend.disabled = true;
+        btnSend.innerHTML = `<span>Sending...</span>`;
+      }
+      if (errorAlert) errorAlert.style.display = "none";
+
+      try {
+        const res = await sendEmailVerificationCode(email);
+        if (codeGroup) codeGroup.style.display = "block";
+
+        if (res.sent) {
+          playSuccess();
+          showToast(`Verification code sent to ${email}!`, "success");
+        } else {
+          if (errorAlert) {
+            errorAlert.style.display = "block";
+            if (errorMsg) {
+              errorMsg.textContent = res.errorMessage
+                ? `Verification Response: ${res.errorMessage}`
+                : "Could not send verification email.";
+            }
+          }
+          if (quickDisplay) quickDisplay.textContent = res.code;
+          showToast("Use the test code shown below to verify.", "default");
+        }
+      } catch (err) {
+        if (codeGroup) codeGroup.style.display = "block";
+        if (errorAlert) {
+          errorAlert.style.display = "block";
+          if (errorMsg) errorMsg.textContent = "Verification request failed.";
+          if (quickDisplay && state.pendingVerification) {
+            quickDisplay.textContent = state.pendingVerification.code;
+          }
+        }
+      } finally {
+        if (btnSend) {
+          btnSend.disabled = false;
+          btnSend.innerHTML = `<span>Send 6-Digit Code</span>`;
+        }
+      }
+    }
+
+    document.getElementById("btn-change-pwd-send-code")?.addEventListener("click", handleSendChangePwdCode);
+    document.getElementById("btn-change-pwd-resend-code")?.addEventListener("click", handleSendChangePwdCode);
+
+    document.getElementById("btn-change-pwd-quick-code")?.addEventListener("click", () => {
+      const codeInput = document.getElementById("change-pwd-code-input");
+      if (codeInput && state.pendingVerification) {
+        codeInput.value = state.pendingVerification.code;
+        document.getElementById("btn-change-pwd-verify-code")?.click();
+      }
+    });
+
+    document.getElementById("btn-change-pwd-verify-code")?.addEventListener("click", () => {
+      const codeInput = document.getElementById("change-pwd-code-input");
+      const emailInput = document.getElementById("change-pwd-email-input");
+      const verifiedChip = document.getElementById("change-pwd-verified-chip");
+      const codeGroup = document.getElementById("change-pwd-code-group");
+      const errorAlert = document.getElementById("change-pwd-error-alert");
+      const fieldsWrap = document.getElementById("change-pwd-fields-wrap");
+      const btnSendCode = document.getElementById("btn-change-pwd-send-code");
+
+      const entered = codeInput?.value.trim();
+      const email = emailInput?.value.trim().toLowerCase();
+
+      if (!state.pendingVerification || !entered) {
+        showToast("Please enter the 6-digit code", "error");
+        return;
+      }
+
+      if (entered === state.pendingVerification.code && email === state.pendingVerification.email) {
+        playSuccess();
+        changePwdState.verified = true;
+        changePwdState.email = email;
+        if (verifiedChip) verifiedChip.style.display = "block";
+        if (codeGroup) codeGroup.style.display = "none";
+        if (errorAlert) errorAlert.style.display = "none";
+        if (emailInput) emailInput.disabled = true;
+        if (btnSendCode) btnSendCode.style.display = "none";
+        if (fieldsWrap) fieldsWrap.style.display = "block";
+        document.getElementById("change-pwd-new")?.focus();
+        showToast("Email verified! You can now set your new password.", "success");
+      } else {
+        showToast("Incorrect code. Please check your email or resend.", "error");
+      }
+    });
+
+    document.getElementById("change-pwd-email-input")?.addEventListener("input", () => {
+      if (changePwdState.isForgot) {
+        changePwdState.verified = false;
+        changePwdState.email = "";
+        state.pendingVerification = null;
+        const verifiedChip = document.getElementById("change-pwd-verified-chip");
+        const codeGroup = document.getElementById("change-pwd-code-group");
+        const errorAlert = document.getElementById("change-pwd-error-alert");
+        const fieldsWrap = document.getElementById("change-pwd-fields-wrap");
+        if (verifiedChip) verifiedChip.style.display = "none";
+        if (codeGroup) codeGroup.style.display = "none";
+        if (errorAlert) errorAlert.style.display = "none";
+        if (fieldsWrap) fieldsWrap.style.display = "none";
+      }
+    });
+
     document.getElementById("form-change-password")?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const lockedEmail = (state.userProfile && state.userProfile.email)
-        ? state.userProfile.email.trim().toLowerCase()
-        : (document.getElementById("change-pwd-email")?.getAttribute("data-locked-email") || document.getElementById("change-pwd-email")?.value.trim().toLowerCase() || "");
-      const email = lockedEmail;
+      const emailInput = document.getElementById("change-pwd-email-input");
+      const email = (changePwdState.email || emailInput?.value.trim() || "").toLowerCase();
       const newPass = document.getElementById("change-pwd-new")?.value || "";
       const confirmPass = document.getElementById("change-pwd-confirm")?.value || "";
 
       if (!email) {
-        showToast("No associate email locked for this password change!", "error");
+        showToast("Please provide your associate email address!", "error");
+        return;
+      }
+
+      if (changePwdState.isForgot && (!changePwdState.verified || changePwdState.email !== email)) {
+        showToast("Please send and verify the 6-digit code first!", "error");
         return;
       }
 
@@ -5893,10 +6184,17 @@
 
       closeModal(document.getElementById("modal-change-password"));
       playSuccess();
-      showToast("Password successfully changed!", "success");
+      showToast("Password successfully updated! You can now log in.", "success");
       updateUserHeaderDisplay();
       updateCountsAndTitle();
       state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
+
+      if (changePwdState.isForgot || !isUserLoggedIn()) {
+        openLoginModal();
+        const loginEmail = document.getElementById("login-email");
+        if (loginEmail) loginEmail.value = email;
+        document.getElementById("login-password")?.focus();
+      }
     });
 
     // 20. User Account Menu Actions
@@ -5909,7 +6207,7 @@
     document.getElementById("btn-menu-change-pwd")?.addEventListener("click", () => {
       playPop();
       closeModal(document.getElementById("modal-user-menu"));
-      openChangePasswordModal(state.userProfile ? state.userProfile.email : "");
+      openChangePasswordModal(state.userProfile ? state.userProfile.email : "", false);
     });
 
     document.getElementById("btn-menu-logout")?.addEventListener("click", () => {
@@ -5930,10 +6228,10 @@
     document.getElementById("btn-back-change-pwd-modal")?.addEventListener("click", () => {
       playPop();
       closeModal(document.getElementById("modal-change-password"));
-      if (isUserLoggedIn()) {
-        openUserMenuModal();
-      } else {
+      if (changePwdState.isForgot || !isUserLoggedIn()) {
         openLoginModal();
+      } else {
+        openUserMenuModal();
       }
     });
 
@@ -5960,6 +6258,32 @@
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!email || !emailRegex.test(email)) {
         showToast("Please enter a valid email address first!", "error");
+        signupEmailInput?.focus();
+        return;
+      }
+
+      const normalizedEmail = email.toLowerCase();
+      let existingAssoc = state.associates.find(
+        a => a.email && a.email.trim().toLowerCase() === normalizedEmail && (a.password || (a.device && a.device.password))
+      );
+      if (!existingAssoc) {
+        try {
+          const res = await fetch(
+            `${SUPABASE_REST_URL}/associates?email=ilike.${encodeURIComponent(normalizedEmail)}&select=*`,
+            { headers: getSupabaseHeaders() }
+          );
+          if (res.ok) {
+            const rows = await res.json();
+            if (Array.isArray(rows) && rows.length > 0) {
+              const r = rows[0];
+              const p = r.password || (r.device && r.device.password);
+              if (p) existingAssoc = r;
+            }
+          }
+        } catch (e) { }
+      }
+      if (existingAssoc) {
+        showToast("An account already exists with this email! Please log in instead.", "error");
         signupEmailInput?.focus();
         return;
       }
@@ -6035,24 +6359,34 @@
           btnSignupStep1Next.disabled = false;
           btnSignupStep1Next.classList.remove("is-disabled");
         }
-        showToast("Email confirmed! Click Continue to enter your name.", "success");
       } else {
         showToast("Incorrect code. Please try again.", "error");
       }
     });
 
     signupEmailInput?.addEventListener("input", () => {
-      if (signupState.emailVerified) {
-        signupState.emailVerified = false;
-        if (signupVerifiedChip) signupVerifiedChip.style.display = "none";
-        if (btnSignupStep1Next) {
-          btnSignupStep1Next.disabled = true;
-          btnSignupStep1Next.classList.add("is-disabled");
-        }
+      signupState.email = "";
+      signupState.emailVerified = false;
+      state.pendingVerification = null;
+      if (signupVerifiedChip) signupVerifiedChip.style.display = "none";
+      if (signupCodeGroup) signupCodeGroup.style.display = "none";
+      if (signupErrorAlert) signupErrorAlert.style.display = "none";
+      if (signupCodeInput) signupCodeInput.value = "";
+      if (btnSignupStep1Next) {
+        btnSignupStep1Next.disabled = true;
+        btnSignupStep1Next.classList.add("is-disabled");
       }
     });
 
     btnSignupStep1Next?.addEventListener("click", () => {
+      const email = (signupEmailInput?.value || signupState.email || "").trim().toLowerCase();
+      const existing = state.associates.find(
+        a => a.email && a.email.trim().toLowerCase() === email && (a.password || (a.device && a.device.password))
+      );
+      if (existing) {
+        showToast("An account already exists for this email! Please log in instead.", "error");
+        return;
+      }
       if (!signupState.emailVerified) {
         showToast("Please verify your email address first!", "error");
         return;
@@ -6205,7 +6539,11 @@
       const existingAssoc = state.associates.find(
         a => a.email && a.email.trim().toLowerCase() === signupState.email.toLowerCase()
       );
-      const isAlreadyApproved = existingAssoc ? existingAssoc.approved !== false : false;
+      if (existingAssoc && (existingAssoc.password || (existingAssoc.device && existingAssoc.device.password))) {
+        showToast("An account already exists for this email! Please log in instead.", "error");
+        return;
+      }
+      const isAlreadyApproved = existingAssoc ? existingAssoc.approved === true : false;
       const dev = detectDeviceDetails();
       const fullName = `${signupState.firstName} ${signupState.lastName}`.trim();
       const finalAvatar = signupState.uploadedAvatarDataUrl || signupState.avatar || "👨‍🍳";

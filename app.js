@@ -467,7 +467,15 @@
   // ==========================================================================
   function cleanShiftNotes(notes) {
     if (!notes) return "";
-    return String(notes)
+    let str = String(notes).trim();
+    // Strip any raw JSON string or array object (e.g. associate metadata or history slop)
+    if ((str.startsWith("{") && str.endsWith("}")) || (str.startsWith("[") && str.endsWith("]"))) {
+      try {
+        const testObj = JSON.parse(str);
+        if (testObj && typeof testObj === "object") return "";
+      } catch (e) { }
+    }
+    return str
       .replace(/<!--[\s\S]*?-->/g, "")
       .replace(/%5B%7B[\s\S]*?%7D%5D/gi, "")
       .replace(/<!--edit_history:[\s\S]*?-->/gi, "")
@@ -476,6 +484,22 @@
 
   function mapDbRowToShift(row) {
     if (!row) return null;
+    const strId = String(row.id || "");
+    const strStatus = String(row.status || "");
+    // Strictly filter out non-shift rows (associate profiles, configs, history rows)
+    if (
+      strId === SUPABASE_EMAILJS_CONFIG_ID ||
+      strStatus === "config" ||
+      strStatus === "associate_profile" ||
+      strStatus === "shift_history" ||
+      strId.startsWith("assoc__") ||
+      strId.startsWith("shifthist__") ||
+      strId.startsWith("seed-438-") ||
+      !row.date ||
+      row.date === "1970-01-01"
+    ) {
+      return null;
+    }
     if (row.data && typeof row.data === "object") {
       const d = row.data;
       return {
@@ -1315,7 +1339,10 @@
               s.status !== "shift_history" &&
               !String(s.id).startsWith("seed-438-") &&
               !String(s.id).startsWith("shifthist__") &&
-              !String(s.id).startsWith("assoc__")
+              !String(s.id).startsWith("assoc__") &&
+              s.id !== SUPABASE_EMAILJS_CONFIG_ID &&
+              s.date &&
+              s.date !== "1970-01-01"
           ).map(s => ({
             ...s,
             notes: cleanShiftNotes(s.notes)

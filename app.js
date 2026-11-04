@@ -2081,36 +2081,27 @@
 
     if (state.shiftSort === "highest_offer") {
       labelEl.innerHTML = `
-        <svg class="ui-money-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;margin-right:5px;">
-          <path d="M12 21.5C6.8 21.5 4.5 18.2 4.5 14.5C4.5 11 7.2 9 8.8 8C9.6 7.5 10.1 6 10.3 4.5H13.7C13.9 6 14.4 7.5 15.2 8C16.8 9 19.5 11 19.5 14.5C19.5 18.2 17.2 21.5 12 21.5Z" fill="#FBBF24" stroke="#D97706" stroke-width="1.3"/>
-          <path d="M9.2 4.5C9.6 3.2 10.6 2.5 12 2.5C13.4 2.5 14.4 3.2 14.8 4.5H9.2Z" fill="#FCD34D" stroke="#D97706" stroke-width="1.1"/>
-          <path d="M9.5 7.2C11 7.6 13 7.6 14.5 7.2" stroke="#DC2626" stroke-width="1.6" stroke-linecap="round"/>
-          <path d="M12 9.8V17.2M10.4 11.2C10.4 10.4 11.1 9.9 12 9.9C12.9 9.9 13.6 10.4 13.6 11.2C13.6 12.6 10.4 12.5 10.4 13.9C10.4 14.7 11.1 15.3 12 15.3C12.9 15.3 13.6 14.8 13.6 14" stroke="#15803D" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>Highest Cash Offers`;
+        <svg class="ui-pill-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;">
+          <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+          <circle cx="12" cy="12" r="2.5"></circle>
+          <path d="M6 12h.01M18 12h.01"></path>
+        </svg>Cash Offers`;
     } else if (state.shiftSort === "duration_desc") {
       labelEl.innerHTML = `
-        <svg class="ui-hourglass-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;margin-right:5px;">
-          <rect x="4" y="2" width="16" height="2.5" rx="1.2" fill="#92400E" stroke="#78350F" stroke-width="0.8"/>
-          <rect x="4" y="19.5" width="16" height="2.5" rx="1.2" fill="#92400E" stroke="#78350F" stroke-width="0.8"/>
-          <path d="M6.5 4.5H17.5V7C17.5 8.8 15.8 10.5 14 12C15.8 13.5 17.5 15.2 17.5 17V19.5H6.5V17C6.5 15.2 8.2 13.5 10 12C8.2 10.5 6.5 8.8 6.5 7V4.5Z" fill="#E0F2FE" fill-opacity="0.85" stroke="#38BDF8" stroke-width="1.3" stroke-linejoin="round"/>
-          <path d="M7.8 7.5H16.2C16.2 8.4 15 9.8 13.5 10.8C12.8 11.3 12 11.5 12 11.5C12 11.5 11.2 11.3 10.5 10.8C9 9.8 7.8 8.4 7.8 7.5Z" fill="#F59E0B"/>
-          <line x1="12" y1="11.5" x2="12" y2="15.5" stroke="#F59E0B" stroke-width="1.3" stroke-linecap="round"/>
-          <path d="M8 19.5H16C16 19 14.5 16.5 12 16.5C9.5 16.5 8 19 8 19.5Z" fill="#F59E0B"/>
-        </svg>Longest Duration`;
+        <svg class="ui-pill-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;">
+          <path d="M5 2h14"></path>
+          <path d="M5 22h14"></path>
+          <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+          <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+        </svg>Duration`;
     } else {
       labelEl.innerHTML = `
-        <svg class="ui-cal-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;margin-right:5px;">
-          <rect x="3" y="4" width="18" height="18" rx="3.5" fill="#FFFFFF" stroke="#60A5FA" stroke-width="1.8"/>
-          <path d="M3 5.5C3 4.39543 3.89543 3.5 5 3.5H19C20.1046 3.5 21 4.39543 21 5.5V9.5H3V5.5Z" fill="#38BDF8"/>
-          <line x1="8" y1="2" x2="8" y2="5.5" stroke="#0284C7" stroke-width="2.2" stroke-linecap="round"/>
-          <line x1="16" y1="2" x2="16" y2="5.5" stroke="#0284C7" stroke-width="2.2" stroke-linecap="round"/>
-          <circle cx="8" cy="13.5" r="1.3" fill="#38BDF8"/>
-          <circle cx="12" cy="13.5" r="1.3" fill="#38BDF8"/>
-          <circle cx="16" cy="13.5" r="1.3" fill="#38BDF8"/>
-          <circle cx="8" cy="17.5" r="1.3" fill="#38BDF8"/>
-          <circle cx="12" cy="17.5" r="1.3" fill="#38BDF8"/>
-          <circle cx="16" cy="17.5" r="1.3" fill="#38BDF8"/>
-        </svg>Soonest Dates`;
+        <svg class="ui-pill-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;">
+          <rect x="3" y="4" width="18" height="18" rx="3" ry="3"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>Date`;
     }
   }
 
@@ -2195,7 +2186,7 @@
           </span>
           <span class="shifts-date-title">${formatDateFullHuman(dateKey)}</span>
         </div>
-        <button type="button" class="btn-pill-small btn-post-for-date" title="Post a shift for ${formatDateHuman(dateKey)}">+ Post for this day</button>
+        <button type="button" class="btn-pill-small btn-post-for-date" title="Post a shift for ${formatDateHuman(dateKey)}">+ Post</button>
       `;
 
       headerEl.querySelector(".btn-post-for-date")?.addEventListener("click", (e) => {
@@ -3590,8 +3581,36 @@
     });
   }
 
+  function closeAllDropdowns(exceptMenuId = null) {
+    const shiftFilterMenu = document.getElementById("shift-filter-menu");
+    const btnShiftFilter = document.getElementById("btn-shift-filter");
+    const levelDropdownMenu = document.getElementById("level-dropdown-menu");
+    const btnLevelDropdown = document.getElementById("btn-level-dropdown");
+
+    if (shiftFilterMenu && exceptMenuId !== "shift-filter-menu") {
+      shiftFilterMenu.style.display = "none";
+      shiftFilterMenu.classList.remove("open");
+      btnShiftFilter?.setAttribute("aria-expanded", "false");
+    }
+    if (levelDropdownMenu && exceptMenuId !== "level-dropdown-menu") {
+      levelDropdownMenu.style.display = "none";
+      levelDropdownMenu.classList.remove("open");
+      btnLevelDropdown?.setAttribute("aria-expanded", "false");
+    }
+  }
+
   function openModal(modalEl) {
     if (!modalEl) return;
+    closeAllDropdowns();
+    document.querySelectorAll(".modal-backdrop.active").forEach(other => {
+      if (other !== modalEl) {
+        other.classList.remove("active");
+        other.setAttribute("aria-hidden", "true");
+        other.style.transition = "none";
+        void other.offsetHeight;
+        other.style.transition = "";
+      }
+    });
     resetPasswordToggles(modalEl);
     modalEl.classList.add("active");
     modalEl.setAttribute("aria-hidden", "false");
@@ -3925,6 +3944,10 @@
 
     function setView(viewName) {
       playPop();
+      closeAllDropdowns();
+      if (state.currentView === "week" && viewName !== "week") {
+        state.shiftViewScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      }
       state.currentView = viewName;
 
       // Update Desktop Pill Switcher
@@ -3966,9 +3989,24 @@
         calendarView?.classList.remove("active");
         weekView?.classList.add("active");
         renderWeekView();
+        const restoreY = state.shiftViewScrollY || 0;
+        if (restoreY > 0) {
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: restoreY, behavior: "instant" });
+            setTimeout(() => {
+              window.scrollTo({ top: restoreY, behavior: "instant" });
+            }, 30);
+          });
+        }
       }
       updateCountsAndTitle();
     }
+
+    window.addEventListener("scroll", () => {
+      if (state.currentView === "week") {
+        state.shiftViewScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      }
+    }, { passive: true });
 
     btnViewMonth?.addEventListener("click", () => setView("month"));
     btnViewWeek?.addEventListener("click", () => setView("week"));
@@ -4309,12 +4347,15 @@
     // Shift View Filter & Sort Dropdown Menu
     const btnShiftFilter = document.getElementById("btn-shift-filter");
     const shiftFilterMenu = document.getElementById("shift-filter-menu");
-    const btnResetShiftFilters = document.getElementById("btn-reset-shift-filters");
+    const shiftFilterWrapper = document.getElementById("shift-filter-wrapper");
 
     function toggleShiftFilterMenu(show) {
       if (!shiftFilterMenu || !btnShiftFilter) return;
       const isOpen = shiftFilterMenu.style.display === "block" || shiftFilterMenu.classList.contains("open");
       const shouldOpen = typeof show === "boolean" ? show : !isOpen;
+      if (shouldOpen) {
+        closeAllDropdowns("shift-filter-menu");
+      }
       shiftFilterMenu.style.display = shouldOpen ? "block" : "none";
       shiftFilterMenu.classList.toggle("open", shouldOpen);
       btnShiftFilter.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
@@ -4324,15 +4365,6 @@
       e.stopPropagation();
       playPop();
       toggleShiftFilterMenu();
-    });
-
-    // Close filter dropdown if tapped outside
-    document.addEventListener("click", (e) => {
-      if (shiftFilterMenu && (shiftFilterMenu.style.display === "block" || shiftFilterMenu.classList.contains("open"))) {
-        if (!e.target.closest("#shift-filter-wrapper")) {
-          toggleShiftFilterMenu(false);
-        }
-      }
     });
 
     // Prevent taps inside the menu from unintentionally bubbling to close
@@ -4345,7 +4377,7 @@
       radio.addEventListener("change", (e) => {
         state.shiftSort = e.target.value;
         playPop();
-        toggleShiftFilterMenu(false);
+        closeAllDropdowns();
         updateShiftFilterButtonUI();
         renderWeekView();
       });
@@ -4443,9 +4475,7 @@
         closeModal(document.getElementById("modal-admin-login"));
         if (input) input.value = "";
         state.currentView === "month" ? renderCalendarMonth() : renderWeekView();
-        setTimeout(() => {
-          openManagerSheet();
-        }, 120);
+        openManagerSheet();
       } else {
         showToast("Incorrect manager password!", "error");
         if (input) {
@@ -4759,22 +4789,64 @@
 
     const btnLevelDropdown = document.getElementById("btn-level-dropdown");
     const levelDropdownMenu = document.getElementById("level-dropdown-menu");
+    const levelDropdownWrapper = document.querySelector(".level-dropdown-wrapper");
+
+    function toggleLevelDropdown(show) {
+      if (!levelDropdownMenu || !btnLevelDropdown) return;
+      const isOpen = levelDropdownMenu.style.display === "block" || levelDropdownMenu.classList.contains("open");
+      const shouldOpen = typeof show === "boolean" ? show : !isOpen;
+      if (shouldOpen) {
+        closeAllDropdowns("level-dropdown-menu");
+      }
+      levelDropdownMenu.style.display = shouldOpen ? "block" : "none";
+      levelDropdownMenu.classList.toggle("open", shouldOpen);
+      btnLevelDropdown.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+    }
 
     btnLevelDropdown?.addEventListener("click", (e) => {
       e.stopPropagation();
       playPop();
-      const isOpen = levelDropdownMenu && levelDropdownMenu.style.display === "block";
-      if (levelDropdownMenu) {
-        levelDropdownMenu.style.display = isOpen ? "none" : "block";
-      }
-      btnLevelDropdown.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      toggleLevelDropdown();
     });
 
-    document.addEventListener("click", (e) => {
-      const wrapper = document.querySelector(".level-dropdown-wrapper");
-      if (wrapper && !wrapper.contains(e.target)) {
-        if (levelDropdownMenu) levelDropdownMenu.style.display = "none";
-        btnLevelDropdown?.setAttribute("aria-expanded", "false");
+    // Prevent taps inside the menu from unintentionally bubbling to close
+    levelDropdownMenu?.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    // Unified Dropdown Management:
+    // Only one dropdown can be open at a time; clicking or tapping anywhere outside closes all dropdowns.
+    const handleOutsideDropdownClick = (e) => {
+      const isShiftOpen = shiftFilterMenu && (shiftFilterMenu.style.display === "block" || shiftFilterMenu.classList.contains("open"));
+      const isLevelOpen = levelDropdownMenu && (levelDropdownMenu.style.display === "block" || levelDropdownMenu.classList.contains("open"));
+
+      if (!isShiftOpen && !isLevelOpen) return;
+
+      const targetEl = e.target instanceof Element ? e.target : e.target?.parentElement;
+      if (!targetEl) {
+        closeAllDropdowns();
+        return;
+      }
+
+      const inShift = Boolean(targetEl.closest("#shift-filter-wrapper") || (shiftFilterWrapper && shiftFilterWrapper.contains(targetEl)));
+      const inLevel = Boolean(targetEl.closest(".level-dropdown-wrapper") || (levelDropdownWrapper && levelDropdownWrapper.contains(targetEl)));
+
+      if (!inShift && !inLevel) {
+        closeAllDropdowns();
+      } else if (inShift && !inLevel) {
+        closeAllDropdowns("shift-filter-menu");
+      } else if (inLevel && !inShift) {
+        closeAllDropdowns("level-dropdown-menu");
+      }
+    };
+
+    window.addEventListener("click", handleOutsideDropdownClick, true);
+    window.addEventListener("pointerdown", handleOutsideDropdownClick, true);
+    window.addEventListener("touchstart", handleOutsideDropdownClick, { capture: true, passive: true });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeAllDropdowns();
       }
     });
 
